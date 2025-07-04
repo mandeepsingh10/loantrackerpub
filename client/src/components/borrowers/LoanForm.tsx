@@ -83,30 +83,15 @@ const loanFormSchema = z.object({
 )
 .refine(
   (data) => {
-    if (data.loanStrategy === "custom") {
-      return data.customDueDate && data.customDueDate.trim() !== "" && 
-             data.customPaymentAmount && data.customPaymentAmount.trim() !== "";
-    }
-    return true;
-  },
-  {
-    message: "Due date and payment amount are required for CUSTOM strategy",
-    path: ["customDueDate"],
-  }
-)
-.refine(
-  (data) => {
     if (data.loanStrategy === "gold_silver") {
       return data.pmType && data.pmType.trim() !== "" && 
              data.metalWeight && data.metalWeight.trim() !== "" &&
-             data.purity && data.purity.trim() !== "" &&
-             data.goldSilverDueDate && data.goldSilverDueDate.trim() !== "" &&
-             data.goldSilverPaymentAmount && data.goldSilverPaymentAmount.trim() !== "";
+             data.purity && data.purity.trim() !== "";
     }
     return true;
   },
   {
-    message: "PM Type, Weight, Purity, Due Date, and Payment Amount are required for Gold & Silver strategy",
+    message: "PM Type, Weight, and Purity are required for Gold & Silver strategy",
     path: ["pmType"],
   }
 );
@@ -215,16 +200,11 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
       tenure: "12",
       customEmiAmount: "1000",
       flatMonthlyAmount: "1000",
-      customDueDate: "",
-      customPaymentAmount: "",
       pmType: "",
       metalWeight: "",
       purity: "",
       netWeight: "",
-
       goldSilverNotes: "",
-      goldSilverDueDate: "",
-      goldSilverPaymentAmount: "",
     },
   });
 
@@ -263,8 +243,7 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
       });
     } else if (values.loanStrategy === "custom") {
       Object.assign(formattedData, {
-        customDueDate: values.customDueDate,
-        customPaymentAmount: parseFloat(values.customPaymentAmount || "0")
+        // No first payment fields for custom loans
       });
     } else if (values.loanStrategy === "gold_silver") {
       Object.assign(formattedData, {
@@ -272,8 +251,6 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
         metalWeight: parseFloat(values.metalWeight || "0"),
         purity: parseFloat(values.purity || "0"),
         netWeight: parseFloat(values.netWeight || "0"),
-        goldSilverDueDate: values.goldSilverDueDate,
-        goldSilverPaymentAmount: parseFloat(values.goldSilverPaymentAmount || "0"),
         goldSilverNotes: values.goldSilverNotes || ""
       });
     }
@@ -511,47 +488,11 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
               )}
 
               {loanStrategy === "custom" && (
-                <>
-                  <FormField
-                    control={form.control}
-                    name="customDueDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Payment Due Date</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="date"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Select the due date for the first payment.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="customPaymentAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Payment Amount (₹)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="text"
-                            placeholder="Enter payment amount"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Enter the amount for the first payment. Additional payments can be added later.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-gray-600">
+                    For custom loans, payments will be added manually after loan creation.
+                  </p>
+                </div>
               )}
 
               {loanStrategy === "gold_silver" && (
@@ -644,47 +585,10 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="goldSilverDueDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Payment Due Date</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="date"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Select the due date for the first payment.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="goldSilverPaymentAmount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Payment Amount (₹)</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="text"
-                              placeholder="Enter payment amount"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Enter the amount for the first payment. Additional payments can be added later.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <p className="text-gray-600">
+                      For gold & silver loans, payments will be added manually after loan creation.
+                    </p>
                   </div>
                 </>
               )}

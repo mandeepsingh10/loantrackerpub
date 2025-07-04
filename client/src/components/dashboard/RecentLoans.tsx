@@ -7,9 +7,15 @@ import StatusBadge from "@/components/ui/status-badge";
 import { format } from "date-fns";
 import { BorrowerDetails } from "@/components/borrowers/BorrowerDetails";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 const RecentLoans = () => {
   const [selectedBorrower, setSelectedBorrower] = useState<number | null>(null);
+  const [isAmountVisible, setIsAmountVisible] = useState(false);
+
+  const toggleAmountVisibility = () => {
+    setIsAmountVisible(!isAmountVisible);
+  };
   
   const { data: recentLoans, isLoading } = useQuery({
     queryKey: ["/api/dashboard/recent-loans"],
@@ -42,11 +48,20 @@ const RecentLoans = () => {
       <Card className="bg-black border-gray-700">
         <CardHeader className="flex flex-row items-center justify-between px-6 pt-6 pb-0">
           <CardTitle className="text-white">Recent Loans</CardTitle>
-          <Link href="/borrowers">
-            <Button variant="link" className="text-blue-400 font-medium hover:text-blue-300">
-              View All
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleAmountVisibility}
+              className="text-gray-400 hover:text-white transition-colors duration-200 p-1 rounded"
+              title={isAmountVisible ? "Hide amounts" : "Show amounts"}
+            >
+              {isAmountVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+            <Link href="/borrowers">
+              <Button variant="link" className="text-blue-400 font-medium hover:text-blue-300">
+                View All
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -87,7 +102,12 @@ const RecentLoans = () => {
                           <div className="text-white font-medium">{loan.borrowerName || 'Unknown'}</div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-white">₹{loan.amount ? loan.amount.toLocaleString() : '0'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-white">
+                        {isAmountVisible ? 
+                          `₹${loan.amount ? loan.amount.toLocaleString() : '0'}` : 
+                          '••••••'
+                        }
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="font-medium text-white capitalize">
                           {loan.loanStrategy ? 

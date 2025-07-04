@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Save, User, X, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import PhotoUpload from "@/components/ui/photo-upload";
 
 const editBorrowerSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -31,6 +32,8 @@ export default function EditBorrower() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const borrowerId = parseInt(id || "0");
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
 
   // Fetch borrower details
   const { data: borrower, isLoading } = useQuery({
@@ -83,13 +86,37 @@ export default function EditBorrower() {
         guarantorPhone: borrower.guarantorPhone || "",
         guarantorAddress: borrower.guarantorAddress || "",
       });
+      
+      // Set photo URL if exists
+      if (borrower.photoUrl) {
+        setPhotoPreviewUrl(borrower.photoUrl);
+      }
     }
   }, [borrower, form]);
 
   // Update borrower mutation
   const updateBorrowerMutation = useMutation({
     mutationFn: async (data: EditBorrowerFormValues) => {
-      const response = await apiRequest("PUT", `/api/borrowers/${borrowerId}`, data);
+      // If there's a new photo, upload it first
+      let photoUrl = borrower?.photoUrl || null;
+      if (selectedPhoto) {
+        const formData = new FormData();
+        formData.append('photo', selectedPhoto);
+        
+        const photoResponse = await apiRequest("POST", "/api/upload/photo", formData);
+        if (photoResponse.ok) {
+          const photoData = await photoResponse.json();
+          photoUrl = photoData.photoUrl;
+        }
+      }
+      
+      // Add photo URL to borrower data
+      const borrowerData = {
+        ...data,
+        photoUrl
+      };
+      
+      const response = await apiRequest("PUT", `/api/borrowers/${borrowerId}`, borrowerData);
       return await response.json();
     },
     onSuccess: () => {
@@ -214,6 +241,16 @@ export default function EditBorrower() {
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Photo Upload Section */}
+              <PhotoUpload
+                currentPhotoUrl={borrower?.photoUrl}
+                onPhotoChange={(file, previewUrl) => {
+                  setSelectedPhoto(file);
+                  setPhotoPreviewUrl(previewUrl || null);
+                }}
+                className="mb-6"
+              />
+
               <div className="grid gap-6">
                 <div>
                   <Label htmlFor="name" className="text-white">Full Name *</Label>

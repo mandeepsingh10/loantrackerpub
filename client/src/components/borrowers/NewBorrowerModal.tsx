@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import PhotoUpload from "@/components/ui/photo-upload";
 
 // Import the LoanForm component
 import LoanForm from "./LoanForm";
@@ -61,6 +62,8 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
   const [step, setStep] = useState<"borrower" | "loan">("borrower");
   const [newBorrowerId, setNewBorrowerId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
 
   // No need for next ID - let database auto-generate
 
@@ -86,6 +89,8 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
       borrowerForm.reset();
       setStep("borrower");
       setNewBorrowerId(null);
+      setSelectedPhoto(null);
+      setPhotoPreviewUrl(null);
     }
   }, [isOpen, borrowerForm]);
 
@@ -93,7 +98,27 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
   const borrowerMutation = useMutation({
     mutationFn: async (data: BorrowerFormValues) => {
       console.log("Frontend sending to API:", data);
-      const response = await apiRequest("POST", "/api/borrowers", data);
+      
+      // If there's a photo, upload it first
+      let photoUrl = null;
+      if (selectedPhoto) {
+        const formData = new FormData();
+        formData.append('photo', selectedPhoto);
+        
+        const photoResponse = await apiRequest("POST", "/api/upload/photo", formData);
+        if (photoResponse.ok) {
+          const photoData = await photoResponse.json();
+          photoUrl = photoData.photoUrl;
+        }
+      }
+      
+      // Add photo URL to borrower data
+      const borrowerData = {
+        ...data,
+        photoUrl
+      };
+      
+      const response = await apiRequest("POST", "/api/borrowers", borrowerData);
       return await response.json();
     },
     onSuccess: (data) => {
@@ -249,6 +274,15 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
         {step === "borrower" ? (
           <Form {...borrowerForm}>
             <form onSubmit={borrowerForm.handleSubmit(onBorrowerSubmit)} className="space-y-6">
+              {/* Photo Upload Section */}
+              <PhotoUpload
+                onPhotoChange={(file, previewUrl) => {
+                  setSelectedPhoto(file);
+                  setPhotoPreviewUrl(previewUrl || null);
+                }}
+                className="mb-6"
+              />
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="font-medium text-white mb-4">Personal Information</h4>

@@ -15,6 +15,7 @@ export const borrowers = pgTable("borrowers", {
   guarantorPhone: text("guarantor_phone"),
   guarantorAddress: text("guarantor_address"),
   notes: text("notes"),
+  photoUrl: text("photo_url"), // URL to stored photo
 });
 
 // Keep enums for backward compatibility but they're not used in current system
@@ -44,18 +45,12 @@ export const loans = pgTable("loans", {
   // Fields for FLAT strategy
   flatMonthlyAmount: real("flat_monthly_amount"),
   
-  // Fields for CUSTOM strategy
-  customDueDate: text("custom_due_date"),
-  customPaymentAmount: real("custom_payment_amount"),
-  
   // Fields for GOLD_SILVER strategy
   pmType: text("pm_type"), // "gold" or "silver"
   metalWeight: real("metal_weight"), // in grams
   purity: real("purity"), // percentage (e.g., 75 for 75%)
   netWeight: real("net_weight"), // calculated field
   amountPaid: real("amount_paid"),
-  goldSilverDueDate: text("gold_silver_due_date"),
-  goldSilverPaymentAmount: real("gold_silver_payment_amount"),
   goldSilverNotes: text("gold_silver_notes"),
   
   createdAt: timestamp("created_at").defaultNow(),
@@ -80,6 +75,30 @@ export const payments = pgTable("payments", {
   paidAmount: real("paid_amount"),
   paymentMethod: text("payment_method"),
   notes: text("notes"),
+});
+
+// User roles enum
+export enum UserRole {
+  ADMIN = "admin",
+  VIEWER = "viewer",
+  MANAGER = "manager"
+}
+
+// User management table
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  email: text("email").unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default(UserRole.VIEWER),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  isActive: boolean("is_active").notNull().default(true),
+  lastLoginAt: timestamp("last_login_at"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetExpires: timestamp("password_reset_expires"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Schema for inserting borrower
@@ -113,6 +132,33 @@ export const updatePaymentSchema = z.object({
   notes: z.string().optional(),
 });
 
+// User schemas
+export const createUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address").optional(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum([UserRole.ADMIN, UserRole.VIEWER, UserRole.MANAGER]).default(UserRole.VIEWER),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+});
+
+export const updateUserSchema = createUserSchema.partial().omit({ password: true });
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
+});
+
+export const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
 // Define relations between tables
 export const borrowersRelations = relations(borrowers, ({ many }) => ({
   loans: many(loans),
@@ -143,3 +189,11 @@ export type InsertLoan = z.infer<typeof insertLoanSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type UpdatePayment = z.infer<typeof updatePaymentSchema>;
+
+// User types
+export type User = typeof users.$inferSelect;
+export type CreateUser = z.infer<typeof createUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
+export type ChangePassword = z.infer<typeof changePasswordSchema>;
+export type ResetPassword = z.infer<typeof resetPasswordSchema>;
+export type LoginCredentials = z.infer<typeof loginSchema>;

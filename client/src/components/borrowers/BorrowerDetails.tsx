@@ -65,6 +65,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [upiId, setUpiId] = useState("");
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   
   // Settlement dialog state
   const [settlementDialog, setSettlementDialog] = useState(false);
@@ -273,6 +274,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
       setPaymentMethod("cash");
       setPaymentNotes("");
       setUpiId("");
+      setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
       
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
@@ -427,6 +429,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
   const handleCollectPayment = (payment: Payment) => {
     setSelectedPayment(payment);
     setPaymentAmount(payment.amount.toString());
+    setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
     setCollectionDialog(true);
   };
 
@@ -445,6 +448,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     collectPaymentMutation.mutate({
       paymentId: selectedPayment.id,
       paidAmount: paidAmount,
+      paidDate: paymentDate,
       paymentMethod,
       notes: finalNotes,
     });
@@ -1371,6 +1375,17 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
               </div>
               
               <div>
+                <Label htmlFor="payment-date">Payment Date</Label>
+                <Input
+                  id="payment-date"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
                 <Label htmlFor="method">Payment Method</Label>
                 <select
                   id="method"
@@ -1538,7 +1553,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
           <DialogHeader>
             <DialogTitle>Add Custom Payment</DialogTitle>
             <DialogDescription>
-              Enter the amount and due date for the new payment.
+              Enter the amount and payment date for the new payment. If the payment date is today or earlier, it will be marked as completed automatically.
             </DialogDescription>
           </DialogHeader>
           
@@ -1558,9 +1573,9 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
             </div>
             
             <div className="grid gap-2">
-              <Label htmlFor="custom-due-date">Due Date</Label>
+              <Label htmlFor="custom-payment-date">Payment Date</Label>
               <Input
-                id="custom-due-date"
+                id="custom-payment-date"
                 type="date"
                 value={customPaymentForm.dueDate}
                 onChange={(e) => setCustomPaymentForm({

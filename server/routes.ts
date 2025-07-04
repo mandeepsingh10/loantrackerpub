@@ -1,22 +1,29 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 // Extend session type
 declare module "express-session" {
   interface SessionData {
     authenticated?: boolean;
+    userId?: number;
     username?: string;
+    role?: string;
   }
 }
 import { storage } from "./storage";
+import { AuthService, type AuthenticatedUser } from "./auth";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { 
   insertBorrowerSchema, updateBorrowerSchema, insertLoanSchema, 
   insertPaymentSchema, updatePaymentSchema, 
-  PaymentStatus, LoanStrategy,
-  borrowers, loans, payments
+  createUserSchema, updateUserSchema, changePasswordSchema, resetPasswordSchema, loginSchema,
+  PaymentStatus, LoanStrategy, UserRole,
+  borrowers, loans, payments, users
 } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -50,17 +57,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.status(500).json({ message: 'Unknown error occurred' });
   };
 
-  // Simple user credentials (in production, use a database)
-  const users = [
-    { username: 'admin', password: await bcrypt.hash('Ad@Min2024!', 10), role: 'admin' },
-    { username: 'viewer', password: await bcrypt.hash('Vw@Read2024$', 10), role: 'readonly' },
-    { username: 'mandeepsingh10', password: await bcrypt.hash('Md@Singh2024!', 10), role: 'admin' },
-    { username: 'lakshayb', password: await bcrypt.hash('Lk$Batra2024#', 10), role: 'admin' }
-  ];
+  // Initialize default admin user if no users exist
+  const initializeDefaultAdmin = async () => {
+    try {
+      const existingUsers = await storage.getUsers();
+      if (existingUsers.length === 0) {
+        console.log('No users found, creating default admin user...');
+        await AuthService.createUser({
+          username: 'admin',
+          password: 'Admin@2024!',
+          role: UserRole.ADMIN,
+          firstName: 'System',
+          lastName: 'Administrator',
+          email: 'admin@loansight.com'
+        });
+        console.log('Default admin user created: admin / Admin@2024!');
+      }
+    } catch (error) {
+      console.error('Error initializing default admin:', error);
+    }
+  };
+
+  // Initialize default admin on startup
+  await initializeDefaultAdmin();
+
+
 
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: any) => {
-    if ((req.session as any)?.authenticated) {
+    if ((req.session as any)?.authenticated && (req.session as any)?.userId) {
       next();
     } else {
       res.status(401).json({ message: 'Authentication required' });
@@ -69,39 +94,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin-only middleware for write operations
   const requireAdmin = (req: Request, res: Response, next: any) => {
-    if ((req.session as any)?.authenticated && (req.session as any)?.role === 'admin') {
+    if ((req.session as any)?.authenticated && (req.session as any)?.role === UserRole.ADMIN) {
       next();
     } else {
       res.status(403).json({ message: 'Admin access required' });
     }
   };
 
+  // Manager or Admin middleware
+  const requireManagerOrAdmin = (req: Request, res: Response, next: any) => {
+    const role = (req.session as any)?.role;
+    if ((req.session as any)?.authenticated && (role === UserRole.ADMIN || role === UserRole.MANAGER)) {
+      next();
+    } else {
+      res.status(403).json({ message: 'Manager or Admin access required' });
+    }
+  };
+
+  // Configure multer for photo uploads
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(__dirname, '../uploads/photos');
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      // Generate unique filename with timestamp
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, 'borrower-' + uniqueSuffix + path.extname(file.originalname));
+    }
+  });
+
+  const upload = multer({
+    storage: storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      // Check file type
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    }
+  });
+
+  // Photo upload endpoint
+  app.post('/api/upload/photo', requireAuth, upload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No photo uploaded' });
+      }
+
+      // Generate URL for the uploaded file
+      const photoUrl = `/uploads/photos/${req.file.filename}`;
+      
+      res.status(200).json({ 
+        message: 'Photo uploaded successfully',
+        photoUrl: photoUrl,
+        filename: req.file.filename
+      });
+    } catch (error) {
+      console.error('Photo upload error:', error);
+      res.status(500).json({ message: 'Failed to upload photo' });
+    }
+  });
+
+  // Serve uploaded photos
+  app.use('/uploads', requireAuth, (req: Request, res: Response, next: any) => {
+    // Serve static files from uploads directory
+    const uploadsPath = path.join(__dirname, '../uploads');
+    res.sendFile(path.join(uploadsPath, req.path), (err) => {
+      if (err) {
+        res.status(404).json({ message: 'File not found' });
+      }
+    });
+  });
+
   // Authentication routes
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
       console.log("Login request body:", req.body);
-      const { username, password } = req.body;
       
-      if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password required' });
-      }
-
-      const user = users.find(u => u.username === username);
-      if (!user) {
+      // Validate input
+      const credentials = validateBody(loginSchema, req);
+      
+      // Authenticate user
+      const authenticatedUser = await AuthService.authenticateUser(credentials);
+      
+      if (!authenticatedUser) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
+      // Set session data
       (req.session as any).authenticated = true;
-      (req.session as any).username = username;
-      (req.session as any).role = user.role;
+      (req.session as any).userId = authenticatedUser.id;
+      (req.session as any).username = authenticatedUser.username;
+      (req.session as any).role = authenticatedUser.role;
       
-      console.log("Login successful for:", username, "with role:", user.role);
-      res.status(200).json({ message: 'Login successful', username, role: user.role });
+      console.log("Login successful for:", authenticatedUser.username, "with role:", authenticatedUser.role);
+      res.status(200).json({ 
+        message: 'Login successful', 
+        username: authenticatedUser.username, 
+        role: authenticatedUser.role,
+        firstName: authenticatedUser.firstName,
+        lastName: authenticatedUser.lastName
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: 'Internal server error' });
@@ -117,14 +219,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get('/api/auth/status', (req: Request, res: Response) => {
+  app.get('/api/auth/status', async (req: Request, res: Response) => {
     try {
       console.log("Auth status check, session:", req.session);
-      if ((req.session as any)?.authenticated) {
+      if ((req.session as any)?.authenticated && (req.session as any)?.userId) {
+        // Verify user still exists and is active
+        const user = await AuthService.getUserById((req.session as any).userId);
+        
+        if (!user) {
+          // User no longer exists or is inactive, clear session
+          req.session.destroy(() => {});
+          return res.status(200).json({ authenticated: false });
+        }
+
         const response = { 
           authenticated: true, 
+          userId: (req.session as any).userId,
           username: (req.session as any).username,
-          role: (req.session as any).role 
+          role: (req.session as any).role,
+          firstName: user.firstName,
+          lastName: user.lastName
         };
         console.log("Auth status response:", response);
         res.status(200).json(response);
@@ -136,6 +250,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Auth status error:", error);
       res.status(200).json({ authenticated: false });
+    }
+  });
+
+  // Password reset request
+  app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
+    try {
+      const { username } = req.body;
+      
+      if (!username) {
+        return res.status(400).json({ message: 'Username is required' });
+      }
+
+      const success = await AuthService.requestPasswordReset(username);
+      
+      if (success) {
+        res.status(200).json({ message: 'Password reset instructions sent to your email' });
+      } else {
+        res.status(404).json({ message: 'User not found' });
+      }
+    } catch (error) {
+      console.error('Password reset request error:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // Reset password with token
+  app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
+    try {
+      const resetData = validateBody(resetPasswordSchema, req);
+      
+      const success = await AuthService.resetPassword(resetData.token, resetData.newPassword);
+      
+      if (success) {
+        res.status(200).json({ message: 'Password reset successfully' });
+      } else {
+        res.status(400).json({ message: 'Invalid or expired reset token' });
+      }
+    } catch (error) {
+      console.error('Password reset error:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // Change password (authenticated user)
+  app.post('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const changeData = validateBody(changePasswordSchema, req);
+      const userId = (req.session as any).userId;
+      
+      const success = await AuthService.changePassword(
+        userId, 
+        changeData.currentPassword, 
+        changeData.newPassword
+      );
+      
+      if (success) {
+        res.status(200).json({ message: 'Password changed successfully' });
+      } else {
+        res.status(400).json({ message: 'Current password is incorrect' });
+      }
+    } catch (error) {
+      console.error('Password change error:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // User management routes (Admin only)
+  app.get('/api/users', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const allUsers = await storage.getUsers();
+      const usersWithoutPasswords = allUsers.map(user => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isActive: user.isActive,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }));
+      
+      res.json(usersWithoutPasswords);
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.post('/api/users', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const userData = validateBody(createUserSchema, req);
+      
+      // Validate password strength
+      const passwordValidation = AuthService.validatePassword(userData.password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({ 
+          message: 'Password does not meet requirements',
+          errors: passwordValidation.errors
+        });
+      }
+      
+      const user = await AuthService.createUser(userData);
+      
+      if (user) {
+        res.status(201).json({
+          message: 'User created successfully',
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            firstName: user.firstName,
+            lastName: user.lastName
+          }
+        });
+      } else {
+        res.status(400).json({ message: 'Failed to create user' });
+      }
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.put('/api/users/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const userData = validateBody(updateUserSchema, req);
+      
+      const updatedUser = await storage.updateUser(userId, userData);
+      
+      if (updatedUser) {
+        res.json({
+          message: 'User updated successfully',
+          user: {
+            id: updatedUser.id,
+            username: updatedUser.username,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            isActive: updatedUser.isActive
+          }
+        });
+      } else {
+        res.status(404).json({ message: 'User not found' });
+      }
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.delete('/api/users/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      
+      // Prevent deleting the current user
+      if (userId === (req.session as any).userId) {
+        return res.status(400).json({ message: 'Cannot delete your own account' });
+      }
+      
+      const success = await storage.deleteUser(userId);
+      
+      if (success) {
+        res.json({ message: 'User deleted successfully' });
+      } else {
+        res.status(404).json({ message: 'User not found' });
+      }
+    } catch (error) {
+      handleError(error, res);
     }
   });
 
@@ -184,19 +468,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For flat strategy, we'll generate 6 monthly payments by default
         numberOfPayments = 6;
       } else if (loan.loanStrategy === 'custom') {
-        // For custom strategy, create only one payment with user-defined date and amount
-        numberOfPayments = 1;
-        paymentAmount = loan.customPaymentAmount || loan.amount;
+        // For custom strategy, no payments are generated automatically
+        // Payments will be added manually by the user
+        numberOfPayments = 0;
+        paymentAmount = 0;
+        console.log("Custom loan: No automatic payments generated");
       } else if (loan.loanStrategy === 'gold_silver') {
-        // For gold & silver strategy, create only one payment with user-defined date and amount
-        numberOfPayments = 1;
-        paymentAmount = loan.goldSilverPaymentAmount || loan.amount;
-        console.log("Gold & Silver payment setup:", {
-          numberOfPayments,
-          paymentAmount,
-          goldSilverDueDate: loan.goldSilverDueDate,
-          goldSilverPaymentAmount: loan.goldSilverPaymentAmount
-        });
+        // For gold & silver strategy, no payments are generated automatically
+        // Payments will be added manually by the user
+        numberOfPayments = 0;
+        paymentAmount = 0;
+        console.log("Gold & Silver loan: No automatic payments generated");
       }
       
       console.log(`Generating payment schedule for loan ${loanId}: ${numberOfPayments} payments of ${paymentAmount} each`);
@@ -205,21 +487,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (let i = 0; i < numberOfPayments; i++) {
         let dueDate;
         
-        if (loan.loanStrategy === 'custom' && loan.customDueDate) {
-          // For custom loans, use the user-specified due date
-          dueDate = new Date(loan.customDueDate);
-        } else if (loan.loanStrategy === 'gold_silver' && loan.goldSilverDueDate) {
-          // For gold & silver loans, use the user-specified due date
-          dueDate = new Date(loan.goldSilverDueDate);
-        } else {
-          // For EMI and FLAT strategies, calculate monthly due dates
-          dueDate = addMonths(startDate, i + 1);
-        }
+        // For EMI and FLAT strategies, calculate monthly due dates
+        dueDate = addMonths(startDate, i + 1);
         
         // Determine payment status
         const today = new Date();
-        let status = PaymentStatus.UPCOMING;
+        today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+        const paymentDueDate = new Date(dueDate);
+        paymentDueDate.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
         
+        let status = PaymentStatus.UPCOMING;
+        let paidDate = null;
+        let paidAmount = null;
+        
+        // For EMI and FLAT strategies, use the existing logic
         if (isBefore(dueDate, today)) {
           status = PaymentStatus.OVERDUE;
         } else if (isBefore(dueDate, addMonths(today, 1))) {
@@ -244,7 +525,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           principal: paymentAmount,
           interest: 0, // Simplified for now
           amount: paymentAmount,
-          status
+          status,
+          paidDate,
+          paidAmount
         };
         
         const createdPayment = await storage.createPayment(payment);
@@ -553,15 +836,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenure: rawData.tenure,
         customEmiAmount: rawData.customEmiAmount,
         flatMonthlyAmount: rawData.flatMonthlyAmount,
-        customDueDate: rawData.customDueDate,
-        customPaymentAmount: rawData.customPaymentAmount,
         pmType: rawData.pmType,
         metalWeight: rawData.metalWeight,
         purity: rawData.purity,
         netWeight: rawData.netWeight,
         amountPaid: rawData.amountPaid,
-        goldSilverDueDate: rawData.goldSilverDueDate,
-        goldSilverPaymentAmount: rawData.goldSilverPaymentAmount,
         goldSilverNotes: rawData.goldSilverNotes,
       };
       
@@ -996,7 +1275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { amount, dueDate, notes } = req.body;
 
       if (!amount || !dueDate) {
-        return res.status(400).json({ error: "Amount and due date are required" });
+        return res.status(400).json({ error: "Amount and payment date are required" });
       }
 
       // Get the loan to verify it exists and is of type custom or gold_silver
@@ -1009,6 +1288,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Custom payments are only allowed for Custom and Gold & Silver loans" });
       }
 
+      // Determine payment status based on payment date
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+      const paymentDate = new Date(dueDate);
+      paymentDate.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+      
+      let status = PaymentStatus.UPCOMING;
+      let paidDate = null;
+      let paidAmount = null;
+      
+      // If payment date is today or in the past, automatically mark as collected
+      if (isBefore(paymentDate, today) || paymentDate.getTime() === today.getTime()) {
+        status = PaymentStatus.COLLECTED;
+        paidDate = dueDate; // Use the user-selected payment date
+        paidAmount = amount;
+        console.log(`Auto-marking payment as collected: payment date ${dueDate} is today or in the past`);
+      }
+
       // Create the payment
       const payment = {
         loanId,
@@ -1016,7 +1313,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         principal: amount,
         interest: 0,
         amount: amount,
-        status: PaymentStatus.UPCOMING,
+        status,
+        paidDate,
+        paidAmount,
         notes: notes || ""
       };
 
@@ -1132,24 +1431,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Admin password is required' });
       }
       
-      // Updated admin users array to include all admin users from the main users array
-      const adminUsers = [
-        { username: 'admin', password: await bcrypt.hash('Ad@Min2024!', 10), role: 'admin' },
-        { username: 'mandeepsingh10', password: await bcrypt.hash('Md@Singh2024!', 10), role: 'admin' },
-        { username: 'lakshayb', password: await bcrypt.hash('Lk$Batra2024#', 10), role: 'admin' }
-      ];
-      
-      const currentUser = adminUsers.find(user => user.username === session.username);
+      // Get current user from database
+      const currentUser = await storage.getUserById(session.userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
       }
       
       // Ensure user has admin role
-      if (currentUser.role !== 'admin') {
+      if (currentUser.role !== UserRole.ADMIN) {
         return res.status(403).json({ message: 'Admin role required for this operation' });
       }
       
-      const isPasswordValid = await bcrypt.compare(password, currentUser.password);
+      const isPasswordValid = await bcrypt.compare(password, currentUser.passwordHash);
       if (!isPasswordValid) {
         return res.status(401).json({ message: 'Invalid password' });
       }

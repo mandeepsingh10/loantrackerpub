@@ -1,7 +1,8 @@
 import { borrowers, type Borrower, type InsertBorrower, 
          loans, type Loan, type InsertLoan,
          payments, type Payment, type InsertPayment, type UpdatePayment,
-         PaymentStatus } from "@shared/schema";
+         users, type User, type CreateUser, type UpdateUser,
+         PaymentStatus, UserRole } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, lt, gte, desc, isNull, sql } from "drizzle-orm";
 import { subMonths } from "date-fns";
@@ -41,6 +42,19 @@ export interface IStorage {
     totalAmount: number;
   }>;
   getRecentLoans(limit?: number): Promise<(Loan & { borrowerName: string; status: string; nextPayment: string; })[]>;
+
+  // User management operations
+  getUsers(): Promise<User[]>;
+  getUserById(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(userData: CreateUser): Promise<User>;
+  updateUser(id: number, userData: Partial<UpdateUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<boolean>;
+  updateUserLastLogin(id: number): Promise<void>;
+  setPasswordResetToken(username: string, token: string, expiresAt: Date): Promise<boolean>;
+  resetPassword(token: string, newPasswordHash: string): Promise<boolean>;
+  changePassword(userId: number, newPasswordHash: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -530,6 +544,123 @@ export class DatabaseStorage implements IStorage {
     }
     
     return result;
+  }
+
+  // User management operations
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.isActive, true));
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result.length > 0 ? result[0] : undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result.length > 0 ? result[0] : undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, email));
+    return result.length > 0 ? result[0] : undefined;
+  }
+
+  async createUser(userData: CreateUser): Promise<User> {
+    const bcrypt = await import('bcryptjs');
+    const passwordHash = await bcrypt.hash(userData.password, 12);
+    
+    const result = await db.insert(users).values({
+      username: userData.username,
+      email: userData.email,
+      passwordHash,
+      role: userData.role,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      isActive: true,
+    }).returning();
+    
+    return result[0];
+  }
+
+  async updateUser(id: number, userData: Partial<UpdateUser>): Promise<User | undefined> {
+    const updateData: Record<string, any> = {};
+    
+    if (userData.username !== undefined) updateData.username = userData.username;
+    if (userData.email !== undefined) updateData.email = userData.email;
+    if (userData.role !== undefined) updateData.role = userData.role;
+    if (userData.firstName !== undefined) updateData.firstName = userData.firstName;
+    if (userData.lastName !== undefined) updateData.lastName = userData.lastName;
+    if (userData.isActive !== undefined) updateData.isActive = userData.isActive;
+    
+    updateData.updatedAt = new Date();
+    
+    const result = await db.update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning();
+    
+    return result.length > 0 ? result[0] : undefined;
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    // Soft delete - just mark as inactive
+    const result = await db.update(users)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return result.length > 0;
+  }
+
+  async updateUserLastLogin(id: number): Promise<void> {
+    await db.update(users)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(users.id, id));
+  }
+
+  async setPasswordResetToken(username: string, token: string, expiresAt: Date): Promise<boolean> {
+    const result = await db.update(users)
+      .set({ 
+        passwordResetToken: token, 
+        passwordResetExpires: expiresAt,
+        updatedAt: new Date()
+      })
+      .where(eq(users.username, username))
+      .returning();
+    
+    return result.length > 0;
+  }
+
+  async resetPassword(token: string, newPasswordHash: string): Promise<boolean> {
+    const result = await db.update(users)
+      .set({ 
+        passwordHash: newPasswordHash,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(users.passwordResetToken, token),
+          gte(users.passwordResetExpires, new Date())
+        )
+      )
+      .returning();
+    
+    return result.length > 0;
+  }
+
+  async changePassword(userId: number, newPasswordHash: string): Promise<boolean> {
+    const result = await db.update(users)
+      .set({ 
+        passwordHash: newPasswordHash,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    return result.length > 0;
   }
 }
 
