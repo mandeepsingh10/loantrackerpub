@@ -150,15 +150,16 @@ const PaymentTable = ({ payments }: PaymentTableProps) => {
           )}
         </tbody>
       </table>
-      <div className="bg-gray-800 px-6 py-3 flex items-center justify-between border-t border-gray-700">
-        <div className="text-sm text-gray-300">
-          Showing <span className="font-medium text-white">1</span> to{" "}
-          <span className="font-medium text-white">{payments.length}</span> of{" "}
-          <span className="font-medium text-white">{payments.length}</span> payments
-        </div>
-        {/* Pagination would go here in a real app with more data */}
-      </div>
     </div>
+    <div className="bg-gray-800 px-6 py-3 flex items-center justify-between border-t border-gray-700">
+      <div className="text-sm text-gray-300">
+        Showing <span className="font-medium text-white">1</span> to{" "}
+        <span className="font-medium text-white">{payments.length}</span> of{" "}
+        <span className="font-medium text-white">{payments.length}</span> payments
+      </div>
+      {/* Pagination would go here in a real app with more data */}
+    </div>
+  </div>
   );
 };
 

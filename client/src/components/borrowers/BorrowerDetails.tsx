@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { CheckCircle, AlertCircle, Clock, Check, ChevronDown, Edit, Trash2, Save, X } from "lucide-react";
+import { CheckCircle, AlertCircle, Clock, Check, ChevronDown, Edit, Trash2, Save, X, Upload, Camera, Eye, MoreVertical } from "lucide-react";
 import { Payment } from "@/types";
 import {
   Card,
@@ -42,12 +42,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
+import { LoanHistory } from "./LoanHistory";
+import { AddLoanModal } from "./AddLoanModal";
+import { LoanDetailsModal } from "./LoanDetailsModal";
+import { Loan } from "@/types";
 
 interface BorrowerDetailsProps {
   borrowerId: number;
@@ -105,6 +110,16 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     dueDate: "",
     notes: ""
   });
+
+  // Photo upload state
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Loan management state
+  const [showAddLoanModal, setShowAddLoanModal] = useState(false);
+  const [showLoanDetailsModal, setShowLoanDetailsModal] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
 
   // Fetch borrower details
   const { data: borrower, isLoading: borrowerLoading } = useQuery({
@@ -246,7 +261,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
       // Format the data properly according to the expected schema
       const formattedData = {
         status: "collected",
-        paidDate: new Date().toISOString().split("T")[0], // String format yyyy-mm-dd
+        paidDate: data.paidDate || new Date().toISOString().split("T")[0], // Use provided date or current date
         paidAmount: parseFloat(data.paidAmount),
         paymentMethod: data.paymentMethod,
         notes: data.notes || "",
@@ -394,11 +409,34 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     },
     onError: (error) => {
       console.error("Bulk payment creation error:", error);
+    },
+  });
+
+  // Photo upload mutation
+  const photoUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('photo', file);
+      
+      const response = await apiRequest("POST", "/api/upload/photo", formData);
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      return result.photoUrl;
+    },
+    onSuccess: (photoUrl) => {
+      // Update the borrower with the new photo URL
+      updateBorrowerMutation.mutate({ photoUrl });
+    },
+    onError: (error) => {
       toast({
         title: "Error",
-        description: `Failed to create payments: ${error.message || error}`,
+        description: `Failed to upload photo: ${error}`,
         variant: "destructive",
       });
+      setIsUploadingPhoto(false);
     },
   });
 
@@ -452,8 +490,6 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
       paymentMethod,
       notes: finalNotes,
     });
-    
-    // No automatic due entry creation - user will handle settlement manually
   };
 
   // Handle settlement dialog
@@ -469,17 +505,14 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     mutationFn: async () => {
       if (!settlementPayment || !loans || loans.length === 0) return;
       
-      // Calculate the expected full amount based on loan strategy
-      const expectedAmount = loans[0]?.loanStrategy === 'flat' 
-        ? (loans[0]?.flatMonthlyAmount || 0)
-        : (loans[0]?.customEmiAmount || settlementPayment.amount);
-      
-      const newPaidAmount = expectedAmount; // Complete the full payment
+      // Calculate the total amount to be paid (original paid amount + due amount)
+      const totalPaidAmount = (settlementPayment.paidAmount || 0) + (settlementPayment.dueAmount || 0);
       
       const updateData = {
         status: 'collected',
         paidDate: settlementDate,
-        paidAmount: newPaidAmount,
+        paidAmount: totalPaidAmount,
+        dueAmount: 0, // Clear the due amount
         paymentMethod: settlementPayment.paymentMethod || 'cash',
         notes: `Settlement: ${settlementNotes}` + (settlementPayment.notes ? ` | Original: ${settlementPayment.notes}` : '')
       };
@@ -532,6 +565,12 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     setPaymentAmount(payment.paidAmount?.toString() || "");
     setPaymentMethod(payment.paymentMethod || "cash");
     setPaymentNotes(payment.notes || "");
+    // Set the payment date from the existing payment's paidDate, or current date if not available
+    if (payment.paidDate) {
+      setPaymentDate(format(new Date(payment.paidDate), 'yyyy-MM-dd'));
+    } else {
+      setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+    }
     setCollectionDialog(true);
   };
 
@@ -671,6 +710,45 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     }
   };
 
+  // Photo upload handler
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "File size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    photoUploadMutation.mutate(file);
+  };
+
+  // Loan management handlers
+  const handleAddLoan = () => {
+    setShowAddLoanModal(true);
+  };
+
+  const handleViewLoan = (loan: Loan) => {
+    setSelectedLoan(loan);
+    setShowLoanDetailsModal(true);
+  };
+
   // Loading state
   const isLoading = borrowerLoading || loansLoading || paymentsLoading;
   
@@ -702,13 +780,74 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-[95vw] max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] bg-black border-gray-700">
-          <DialogHeader className="bg-gray-900 -m-6 mb-6 p-6 border-b border-gray-700">
-            <DialogTitle className="text-xl text-white">
-              {borrower ? borrower.name : "Borrower Details"}
-            </DialogTitle>
+          <DialogHeader className="bg-gray-900 -m-6 mb-4 p-4 border-b border-gray-700">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                {borrower && borrower.photoUrl ? (
+                  // Show uploaded photo with dropdown menu
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <div className="cursor-pointer">
+                        <img
+                          src={borrower.photoUrl}
+                          alt={`${borrower.name}'s photo`}
+                          className="w-12 h-12 rounded-lg object-cover border-2 border-gray-600"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuItem onClick={() => setShowPhotoPreview(true)}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Photo
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Change Photo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  // Show camera icon with dropdown menu
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-500 cursor-pointer hover:border-gray-400 hover:bg-gray-700 transition-colors">
+                        <Camera className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Photo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {isUploadingPhoto && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+                    <div className="text-white text-xs">...</div>
+                  </div>
+                )}
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  disabled={isUploadingPhoto}
+                />
+              </div>
+              <DialogTitle className="text-lg text-white">
+                {borrower ? borrower.name : "Borrower Details"}
+              </DialogTitle>
+            </div>
           </DialogHeader>
           
-          <div className="overflow-y-auto max-h-[calc(95vh-120px)] text-white p-6">
+          <div className="overflow-y-auto max-h-[calc(95vh-80px)] text-white p-6">
             {isLoading ? (
               <div className="flex items-center justify-center h-40">
                 <p className="text-gray-300">Loading...</p>
@@ -732,14 +871,16 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
                   <CardContent>
                     {editPersonalInfo ? (
                       <div className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium text-gray-500">Name</label>
-                          <input
-                            type="text"
-                            value={personalForm.name}
-                            onChange={(e) => setPersonalForm({...personalForm, name: e.target.value})}
-                            className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <label className="text-sm font-medium text-gray-500">Name</label>
+                            <input
+                              type="text"
+                              value={personalForm.name}
+                              onChange={(e) => setPersonalForm({...personalForm, name: e.target.value})}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-500">Phone</label>
@@ -943,59 +1084,88 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
                 </Card>
                 
                 <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Loan Information</CardTitle>
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="text-lg">Borrower Summary</CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAddLoan}
+                      className="h-8 text-xs"
+                    >
+                      + Add Loan
+                    </Button>
                   </CardHeader>
                   <CardContent>
                     {loans && loans.length > 0 ? (
-                      <dl className="space-y-2 text-sm font-mono">
-                        <div className="flex">
-                          <dt className="text-gray-400 w-32">Loan Amount:</dt>
-                          <dd className="text-white">{formatCurrency(loans[0].amount)}</dd>
-                        </div>
-                        
-                        <div className="flex">
-                          <dt className="text-gray-400 w-32">Loan Type:</dt>
-                          <dd className="text-white font-medium">
-                            {loans[0]?.loanStrategy?.toUpperCase() || 'EMI'}
-                          </dd>
-                        </div>
-                        
-                        <div className="flex">
-                          <dt className="text-gray-400 w-32">Start Date:</dt>
-                          <dd className="text-white">
-                            {format(new Date(loans[0].startDate), "MMM d, yyyy")}
-                          </dd>
-                        </div>
-
-                        {loans[0].loanStrategy === "emi" && (
-                          <>
-                            <div className="flex">
-                              <dt className="text-gray-400 w-32">Tenure:</dt>
-                              <dd className="text-white">{loans[0].tenure || 0} months</dd>
+                      <div className="space-y-3">
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="text-center p-2 bg-gray-800 rounded">
+                            <div className="text-gray-400 text-xs">Active Loans</div>
+                            <div className="text-white font-bold text-lg">
+                              {loans.filter((loan: any) => loan.status === 'active').length}
                             </div>
-                            
-                            <div className="flex">
-                              <dt className="text-gray-400 w-32">EMI Amount:</dt>
-                              <dd className="text-white">
-                                {formatCurrency(loans[0].customEmiAmount || 0)}
-                              </dd>
-                            </div>
-                          </>
-                        )}
-                        
-                        {loans[0].loanStrategy === "flat" && (
-                          <div className="flex">
-                            <dt className="text-gray-400 w-32">Monthly Amount:</dt>
-                            <dd className="text-white">
-                              {formatCurrency(loans[0].flatMonthlyAmount || 0)}
-                            </dd>
                           </div>
-                        )}
-                      </dl>
+                          <div className="text-center p-2 bg-gray-800 rounded">
+                            <div className="text-gray-400 text-xs">Total Amount</div>
+                            <div className="text-white font-bold text-lg">
+                              {formatCurrency(loans.reduce((sum: number, loan: any) => sum + loan.amount, 0))}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Quick Info */}
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Total Loans:</span>
+                            <span className="text-white font-medium">{loans.length}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Completed:</span>
+                            <span className="text-green-400 font-medium">
+                              {loans.filter((loan: any) => loan.status === 'completed').length}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Defaulted:</span>
+                            <span className="text-red-400 font-medium">
+                              {loans.filter((loan: any) => loan.status === 'defaulted').length}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Next Payment Info */}
+                        {(() => {
+                          const activeLoans = loans.filter((loan: any) => loan.status === 'active');
+                          if (activeLoans.length > 0) {
+                            const nextPayments = activeLoans.map((loan: any) => loan.nextPayment).filter(Boolean);
+                            if (nextPayments.length > 0) {
+                              return (
+                                <div className="mt-3 p-2 bg-blue-900/20 border border-blue-700 rounded">
+                                  <div className="text-blue-400 text-xs font-medium">Next Payment</div>
+                                  <div className="text-white text-sm">
+                                    {nextPayments.length === 1 
+                                      ? nextPayments[0]
+                                      : `${nextPayments.length} loans have upcoming payments`
+                                    }
+                                  </div>
+                                </div>
+                              );
+                            }
+                          }
+                          return null;
+                        })()}
+                      </div>
                     ) : (
-                      <div className="p-4 text-gray-500 text-center">
-                        No loan information available
+                      <div className="text-center py-6">
+                        <div className="text-gray-400 text-sm mb-3">No loans yet</div>
+                        <Button
+                          size="sm"
+                          onClick={handleAddLoan}
+                          className="w-full"
+                        >
+                          + Create First Loan
+                        </Button>
                       </div>
                     )}
                   </CardContent>
@@ -1065,289 +1235,12 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
 
               <Separator />
               
-              {/* Payment Schedule */}
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-lg font-medium">Payment Schedule</h3>
-                  
-                  {/* Add Payment options for all loans */}
-                  {loans && loans.length > 0 && (
-                    <>
-                      {/* Show custom payment button for Custom and Gold & Silver loans */}
-                      {(loans[0].loanStrategy === 'custom' || loans[0].loanStrategy === 'gold_silver') ? (
-                        <Button 
-                          size="sm" 
-                          className="flex items-center"
-                          onClick={() => setShowCustomPaymentDialog(true)}
-                        >
-                          + Add Payment
-                        </Button>
-                      ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="sm" className="flex items-center">
-                              <span className="mr-1">+ Add Payment</span>
-                              <ChevronDown size={16} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => bulkCreatePaymentsMutation.mutate({ loanId: loans[0].id, months: 1 })}
-                            >
-                              Add Single Payment
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => bulkCreatePaymentsMutation.mutate({ loanId: loans[0].id, months: 3 })}
-                            >
-                              Add 3 Months
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => bulkCreatePaymentsMutation.mutate({ loanId: loans[0].id, months: 6 })}
-                            >
-                              Add 6 Months
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => bulkCreatePaymentsMutation.mutate({ loanId: loans[0].id, months: 9 })}
-                            >
-                              Add 9 Months
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => bulkCreatePaymentsMutation.mutate({ loanId: loans[0].id, months: 12 })}
-                            >
-                              Add 12 Months
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </>
-                  )}
-                </div>
-                
-                {loans && loans.length > 0 ? (
-                  payments && payments.length > 0 ? (
-                    <div className="border rounded-md">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Due Date</TableHead>
-                            <TableHead>Amount</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Payment Details</TableHead>
-                            <TableHead>Dues</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {payments.map((payment: Payment) => (
-                            <TableRow key={payment.id}>
-                              <TableCell>
-                                {format(new Date(payment.dueDate), "MMM d, yyyy")}
-                              </TableCell>
-                              <TableCell>{formatCurrency(payment.amount)}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center space-x-1">
-                                  {(() => {
-                                    if (payment.status === "collected") {
-                                      return <CheckCircle className="h-4 w-4 text-green-600" />;
-                                    }
-                                    
-                                    const today = new Date();
-                                    today.setHours(0, 0, 0, 0);
-                                    const dueDate = new Date(payment.dueDate);
-                                    dueDate.setHours(0, 0, 0, 0);
-                                    
-                                    if (dueDate < today) {
-                                      return <AlertCircle className="h-4 w-4 text-red-600" />;
-                                    } else {
-                                      return <Clock className="h-4 w-4 text-blue-600" />;
-                                    }
-                                  })()}
-                                  <Badge variant="outline" className={(() => {
-                                    if (payment.status === "collected") {
-                                      return "bg-green-100 text-green-800";
-                                    }
-                                    
-                                    const today = new Date();
-                                    today.setHours(0, 0, 0, 0);
-                                    const dueDate = new Date(payment.dueDate);
-                                    dueDate.setHours(0, 0, 0, 0);
-                                    
-                                    if (dueDate < today) {
-                                      return "bg-red-100 text-red-800";
-                                    } else {
-                                      return "bg-blue-100 text-blue-800";
-                                    }
-                                  })()}>
-                                    {(() => {
-                                      if (payment.status === "collected") {
-                                        return "Collected";
-                                      }
-                                      
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
-                                      const dueDate = new Date(payment.dueDate);
-                                      dueDate.setHours(0, 0, 0, 0);
-                                      
-                                      if (dueDate < today) {
-                                        return "Missed";
-                                      } else {
-                                        return "Upcoming";
-                                      }
-                                    })()}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {payment.status === "collected" ? (
-                                  <div className="text-sm">
-                                    <div>
-                                      <span className="font-medium">Paid:</span>{" "}
-                                      {payment.paidDate && format(new Date(payment.paidDate), "MMM d, yyyy")}
-                                    </div>
-                                    <div>
-                                      <span className="font-medium">Amount:</span>{" "}
-                                      {formatCurrency(payment.paidAmount || 0)}
-                                    </div>
-                                    {payment.paymentMethod && (
-                                      <div className="capitalize">
-                                        <span className="font-medium">Method:</span>{" "}
-                                        {payment.paymentMethod}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-500 text-sm">Not collected yet</span>
-                                )}
-                              </TableCell>
-                              
-                              {/* Dues column for all loans */}
-                              <TableCell>
-                                {payment.status === "collected" && payment.paidAmount !== null ? (
-                                  (() => {
-                                    // Get expected amount based on loan strategy
-                                    const expectedAmount = loans[0]?.loanStrategy === 'flat' 
-                                      ? (loans[0]?.flatMonthlyAmount || 0)
-                                      : (loans[0]?.customEmiAmount || payment.amount);
-                                    const paidAmount = payment.paidAmount || 0;
-                                    const difference = paidAmount - expectedAmount;
-                                    
-                                    if (difference === 0) {
-                                      return <span className="text-gray-600">No dues</span>;
-                                    } else if (difference < 0) {
-                                      return (
-                                        <span className="text-red-600 font-medium">
-                                          {formatCurrency(Math.abs(difference))} due
-                                        </span>
-                                      );
-                                    } else {
-                                      return (
-                                        <span className="text-green-600 font-medium">
-                                          {formatCurrency(difference)} excess
-                                        </span>
-                                      );
-                                    }
-                                  })()
-                                ) : (
-                                  <span className="text-gray-400">-</span>
-                                )}
-                              </TableCell>
-                              
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end space-x-1">
-                                  {payment.status !== "collected" && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-8 w-8 p-0 hover:bg-black hover:text-white"
-                                            onClick={() => handleCollectPayment(payment)}
-                                          >
-                                            <Check className="h-4 w-4" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <p>Mark as collected</p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                  
-                                  {/* Show Settle button for payments with dues (all loan types) */}
-                                  {payment.status === "collected" && 
-                                   payment.paidAmount !== null && 
-                                   (() => {
-                                     const expectedAmount = loans[0]?.loanStrategy === 'flat' 
-                                       ? (loans[0]?.flatMonthlyAmount || 0)
-                                       : (loans[0]?.customEmiAmount || payment.amount);
-                                     return payment.paidAmount < expectedAmount;
-                                   })() && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-8 px-2 text-xs hover:bg-black hover:text-white"
-                                      onClick={() => handleSettleDue(payment)}
-                                    >
-                                      Settle
-                                    </Button>
-                                  )}
-                                  
-                                  {/* Edit button for all payments */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-8 w-8 p-0 hover:bg-black hover:text-white"
-                                          onClick={() => handleEditPayment(payment)}
-                                        >
-                                          <Edit className="h-5 w-5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Edit payment</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  
-                                  {/* Delete button for all payments */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-8 w-8 p-0 hover:bg-black hover:text-white"
-                                          onClick={() => handleDeletePayment(payment)}
-                                        >
-                                          <Trash2 className="h-5 w-5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Delete payment</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="flex justify-center items-center h-32 text-gray-500 bg-gray-50 border rounded-md">
-                      Payment schedule is being generated. Please check back in a moment.
-                    </div>
-                  )
-                ) : (
-                  <div className="flex justify-center items-center h-32 text-gray-500 bg-gray-50 border rounded-md">
-                    Borrower has no active loan. Add a loan first to see the payment schedule.
-                  </div>
-                )}
-              </div>
+              {/* Loan History */}
+              <LoanHistory 
+                borrowerId={borrowerId}
+                onAddLoan={handleAddLoan}
+                onViewLoan={handleViewLoan}
+              />
             </div>
             )}
           </div>
@@ -1455,12 +1348,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
                   {format(new Date(settlementPayment.dueDate), "MMM d, yyyy")}
                   <br />
                   <span className="text-red-600 font-medium mt-1 block">
-                    Outstanding: {formatCurrency((() => {
-                      const expectedAmount = loans[0]?.loanStrategy === 'flat' 
-                        ? (loans[0]?.flatMonthlyAmount || 0)
-                        : (loans[0]?.customEmiAmount || settlementPayment.amount);
-                      return expectedAmount - (settlementPayment.paidAmount || 0);
-                    })())}
+                    Outstanding: {formatCurrency(settlementPayment.dueAmount || 0)}
                   </span>
                 </>
               )}
@@ -1623,6 +1511,41 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Photo Preview Modal */}
+      <Dialog open={showPhotoPreview} onOpenChange={setShowPhotoPreview}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Photo Preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center">
+            {borrower && borrower.photoUrl && (
+              <img
+                src={borrower.photoUrl}
+                alt={`${borrower.name}'s photo`}
+                className="max-w-full max-h-96 object-contain rounded-lg"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Loan Modal */}
+      <AddLoanModal
+        borrowerId={borrowerId}
+        isOpen={showAddLoanModal}
+        onClose={() => setShowAddLoanModal(false)}
+      />
+
+      {/* Loan Details Modal */}
+      <LoanDetailsModal
+        loan={selectedLoan}
+        isOpen={showLoanDetailsModal}
+        onClose={() => setShowLoanDetailsModal(false)}
+      />
     </>
   );
 };

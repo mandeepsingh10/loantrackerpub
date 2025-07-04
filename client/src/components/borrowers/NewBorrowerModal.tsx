@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -32,7 +32,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import PhotoUpload from "@/components/ui/photo-upload";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Camera, Upload, Eye, MoreVertical } from "lucide-react";
 
 // Import the LoanForm component
 import LoanForm from "./LoanForm";
@@ -64,6 +71,8 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // No need for next ID - let database auto-generate
 
@@ -261,27 +270,102 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
     }
   };
 
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "File size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedPhoto(file);
+    const url = URL.createObjectURL(file);
+    setPhotoPreviewUrl(url);
+  };
+
   return (
     <>
     <Dialog open={isOpen} onOpenChange={handleCloseAtLoanStep}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            {step === "borrower" ? "Add New Borrower" : "Add Loan Details"}
-          </DialogTitle>
+          <div className="flex items-center gap-4">
+            {step === "borrower" && (
+              <div className="relative">
+                {photoPreviewUrl ? (
+                  // Show uploaded photo with dropdown menu
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <div className="cursor-pointer">
+                        <img
+                          src={photoPreviewUrl}
+                          alt="Borrower photo"
+                          className="w-8 h-8 rounded-full object-cover border border-gray-600"
+                        />
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuItem onClick={() => setShowPhotoPreview(true)}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Photo
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Change Photo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  // Show camera icon with dropdown menu
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-500 cursor-pointer hover:border-gray-400 hover:bg-gray-700 transition-colors">
+                        <Camera className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Photo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </div>
+            )}
+            <DialogTitle className="text-xl">
+              {step === "borrower" ? "Add New Borrower" : "Add Loan Details"}
+            </DialogTitle>
+          </div>
         </DialogHeader>
 
         {step === "borrower" ? (
           <Form {...borrowerForm}>
             <form onSubmit={borrowerForm.handleSubmit(onBorrowerSubmit)} className="space-y-6">
-              {/* Photo Upload Section */}
-              <PhotoUpload
-                onPhotoChange={(file, previewUrl) => {
-                  setSelectedPhoto(file);
-                  setPhotoPreviewUrl(previewUrl || null);
-                }}
-                className="mb-6"
-              />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -518,6 +602,27 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
             disabled={deleteBorrowerMutation.isPending}
           >
             {deleteBorrowerMutation.isPending ? "Deleting..." : "Delete Borrower"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Photo Preview Modal */}
+    <Dialog open={showPhotoPreview} onOpenChange={setShowPhotoPreview}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Borrower Photo</DialogTitle>
+        </DialogHeader>
+        <div className="flex justify-center">
+          <img
+            src={photoPreviewUrl}
+            alt="Borrower photo preview"
+            className="max-w-full max-h-96 object-contain rounded-lg"
+          />
+        </div>
+        <div className="flex justify-end mt-4">
+          <Button onClick={() => setShowPhotoPreview(false)}>
+            Close
           </Button>
         </div>
       </DialogContent>

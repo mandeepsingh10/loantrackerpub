@@ -28,6 +28,14 @@ export enum LoanStrategy {
   GOLD_SILVER = "gold_silver",
 }
 
+// Loan status enum
+export enum LoanStatus {
+  ACTIVE = "active",
+  COMPLETED = "completed",
+  DEFAULTED = "defaulted",
+  CANCELLED = "cancelled",
+}
+
 // Loan information table
 export const loans = pgTable("loans", {
   id: serial("id").primaryKey(),
@@ -53,6 +61,9 @@ export const loans = pgTable("loans", {
   amountPaid: real("amount_paid"),
   goldSilverNotes: text("gold_silver_notes"),
   
+  // Loan status
+  status: text("status").default(LoanStatus.ACTIVE).notNull(),
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -73,6 +84,7 @@ export const payments = pgTable("payments", {
   status: text("status").notNull().default(PaymentStatus.UPCOMING),
   paidDate: date("paid_date"),
   paidAmount: real("paid_amount"),
+  dueAmount: real("due_amount").default(0), // Track outstanding balance after partial payments
   paymentMethod: text("payment_method"),
   notes: text("notes"),
 });
@@ -118,6 +130,7 @@ export const insertLoanSchema = createInsertSchema(loans).omit({ id: true, creat
     tenure: z.number().optional(),
     customEmiAmount: z.number().optional(),
     flatMonthlyAmount: z.number().optional(),
+    status: z.enum([LoanStatus.ACTIVE, LoanStatus.COMPLETED, LoanStatus.DEFAULTED, LoanStatus.CANCELLED]).default(LoanStatus.ACTIVE),
   });
 
 // Schema for inserting payment
@@ -128,6 +141,7 @@ export const updatePaymentSchema = z.object({
   status: z.string(),
   paidDate: z.string().or(z.date()).optional(), // Accept either string or Date objects
   paidAmount: z.number().or(z.string().transform(val => Number(val))).optional(), // Accept numbers or strings that can be converted to numbers
+  dueAmount: z.number().optional(), // Track outstanding balance
   paymentMethod: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -185,6 +199,7 @@ export type InsertBorrower = z.infer<typeof insertBorrowerSchema>;
 
 export type Loan = typeof loans.$inferSelect;
 export type InsertLoan = z.infer<typeof insertLoanSchema>;
+export type LoanStatus = typeof LoanStatus[keyof typeof LoanStatus];
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;

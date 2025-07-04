@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
 // Extend session type
 declare module "express-session" {
@@ -30,6 +31,10 @@ import { fromZodError } from "zod-validation-error";
 import { addMonths, format, isBefore, parseISO, subDays } from "date-fns";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Get __dirname equivalent for ES modules
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  
   // Ensure API routes return JSON
   app.use('/api', (req, res, next) => {
     res.setHeader('Content-Type', 'application/json');
@@ -57,12 +62,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.status(500).json({ message: 'Unknown error occurred' });
   };
 
-  // Initialize default admin user if no users exist
-  const initializeDefaultAdmin = async () => {
+  // Initialize default users if no users exist
+  const initializeDefaultUsers = async () => {
     try {
       const existingUsers = await storage.getUsers();
       if (existingUsers.length === 0) {
-        console.log('No users found, creating default admin user...');
+        console.log('No users found, creating default users...');
+        
+        // Create default admin user
         await AuthService.createUser({
           username: 'admin',
           password: 'Admin@2024!',
@@ -72,14 +79,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: 'admin@loansight.com'
         });
         console.log('Default admin user created: admin / Admin@2024!');
+        
+        // Create your user account
+        await AuthService.createUser({
+          username: 'mandeepsingh10',
+          password: 'Md@Singh2024!',
+          role: UserRole.ADMIN,
+          firstName: 'Mandeep',
+          lastName: 'Singh',
+          email: 'mandeep@example.com'
+        });
+        console.log('User account created: mandeepsingh10 / Md@Singh2024!');
+        
+        console.log('Default users initialization completed successfully!');
       }
     } catch (error) {
-      console.error('Error initializing default admin:', error);
+      console.error('Error initializing default users:', error);
     }
   };
 
-  // Initialize default admin on startup
-  await initializeDefaultAdmin();
+  // Initialize default users on startup
+  await initializeDefaultUsers();
 
 
 
@@ -112,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Configure multer for photo uploads
-  const storage = multer.diskStorage({
+  const multerStorage = multer.diskStorage({
     destination: (req, file, cb) => {
       const uploadDir = path.join(__dirname, '../uploads/photos');
       // Create directory if it doesn't exist
@@ -129,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const upload = multer({
-    storage: storage,
+    storage: multerStorage,
     limits: {
       fileSize: 5 * 1024 * 1024 // 5MB limit
     },
@@ -165,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Serve uploaded photos
-  app.use('/uploads', requireAuth, (req: Request, res: Response, next: any) => {
+  app.use('/uploads', (req: Request, res: Response, next: any) => {
     // Serve static files from uploads directory
     const uploadsPath = path.join(__dirname, '../uploads');
     res.sendFile(path.join(uploadsPath, req.path), (err) => {
@@ -705,6 +725,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all loans for a specific borrower
+  app.get('/api/borrowers/:id/loans', requireAuth, async (req, res) => {
+    try {
+      const borrowerId = parseInt(req.params.id);
+      const loans = await storage.getLoansByBorrowerId(borrowerId);
+      
+      // Add next payment information to each loan
+      const loansWithNextPayment = await Promise.all(
+        loans.map(async (loan) => {
+          const nextPayment = await storage.getNextPaymentForLoan(loan.id);
+          return {
+            ...loan,
+            nextPayment: nextPayment ? format(new Date(nextPayment.dueDate), "MMM d, yyyy") : "No payments"
+          };
+        })
+      );
+      
+      res.json(loansWithNextPayment);
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
   // Notes update endpoint
   app.post('/api/borrowers/:id/notes', requireAdmin, (req, res) => {
     const id = parseInt(req.params.id);
@@ -864,6 +907,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const data = validateBody(insertLoanSchema.partial(), req);
       const loan = await storage.updateLoan(id, data);
+      if (!loan) {
+        return res.status(404).json({ message: 'Loan not found' });
+      }
+      res.json(loan);
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.patch('/api/loans/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      // Validate status
+      if (!status || !['active', 'completed', 'defaulted', 'cancelled'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status. Must be one of: active, completed, defaulted, cancelled' });
+      }
+      
+      const loan = await storage.updateLoanStatus(id, status);
       if (!loan) {
         return res.status(404).json({ message: 'Loan not found' });
       }

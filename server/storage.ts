@@ -22,6 +22,7 @@ export interface IStorage {
   getLoanById(id: number): Promise<Loan | undefined>;
   createLoan(loan: InsertLoan): Promise<Loan>;
   updateLoan(id: number, loan: Partial<InsertLoan>): Promise<Loan | undefined>;
+  updateLoanStatus(id: number, status: string): Promise<Loan | undefined>;
   deleteLoan(id: number): Promise<boolean>;
 
   // Payment operations
@@ -33,6 +34,7 @@ export interface IStorage {
   markPaymentCollected(id: number, data: UpdatePayment): Promise<Payment | undefined>;
   deletePayment(id: number): Promise<boolean>;
   getUpcomingPayments(): Promise<Payment[]>;
+  getNextPaymentForLoan(loanId: number): Promise<Payment | undefined>;
 
   // Dashboard operations
   getDashboardStats(): Promise<{
@@ -74,7 +76,8 @@ export class DatabaseStorage implements IStorage {
       guarantorName: borrowers.guarantorName,
       guarantorPhone: borrowers.guarantorPhone,
       guarantorAddress: borrowers.guarantorAddress,
-      notes: borrowers.notes
+      notes: borrowers.notes,
+      photoUrl: borrowers.photoUrl
     }).from(borrowers).where(eq(borrowers.id, id));
     
     if (result.length > 0) {
@@ -116,6 +119,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.guarantorPhone !== undefined) allowedFields.guarantorPhone = updateData.guarantorPhone;
     if (updateData.guarantorAddress !== undefined) allowedFields.guarantorAddress = updateData.guarantorAddress;
     if (updateData.notes !== undefined) allowedFields.notes = updateData.notes;
+    if (updateData.photoUrl !== undefined) allowedFields.photoUrl = updateData.photoUrl;
     
     console.log("allowedFields:", allowedFields);
     
@@ -274,6 +278,14 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0 ? result[0] : undefined;
   }
 
+  async updateLoanStatus(id: number, status: string): Promise<Loan | undefined> {
+    const result = await db.update(loans)
+      .set({ status })
+      .where(eq(loans.id, id))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
+  }
+
   async deleteLoan(id: number): Promise<boolean> {
     // First delete associated payments
     await db.delete(payments).where(eq(payments.loanId, id));
@@ -349,6 +361,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markPaymentCollected(id: number, data: UpdatePayment): Promise<Payment | undefined> {
+    // Get the current payment to check the original amount
+    const currentPayment = await this.getPaymentById(id);
+    if (!currentPayment) {
+      throw new Error('Payment not found');
+    }
+
     // Process the data to ensure correct types
     const updateData: Record<string, any> = {
       status: data.status,
@@ -361,9 +379,21 @@ export class DatabaseStorage implements IStorage {
     
     if (data.paidAmount !== undefined) {
       // Convert string amounts to numbers
-      updateData.paidAmount = typeof data.paidAmount === 'string' 
+      const paidAmount = typeof data.paidAmount === 'string' 
         ? parseFloat(data.paidAmount) 
         : data.paidAmount;
+      
+      updateData.paidAmount = paidAmount;
+      
+      // Calculate due amount (outstanding balance)
+      const originalAmount = currentPayment.amount;
+      const dueAmount = Math.max(0, originalAmount - paidAmount);
+      updateData.dueAmount = dueAmount;
+      
+      // If there's still a due amount, keep status as "due_soon" instead of "collected"
+      if (dueAmount > 0) {
+        updateData.status = PaymentStatus.DUE_SOON;
+      }
     }
     
     if (data.paymentMethod !== undefined) {
@@ -403,6 +433,25 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(payments.dueDate);
+  }
+
+  async getNextPaymentForLoan(loanId: number): Promise<Payment | undefined> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const result = await db.select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.loanId, loanId),
+          gte(payments.dueDate, today.toISOString().split('T')[0]),
+          eq(payments.status, PaymentStatus.UPCOMING)
+        )
+      )
+      .orderBy(payments.dueDate)
+      .limit(1);
+    
+    return result.length > 0 ? result[0] : undefined;
   }
 
   // Dashboard operations

@@ -287,6 +287,21 @@ const RecordPaymentModal = ({ isOpen, onClose }: RecordPaymentModalProps) => {
               />
             </div>
 
+            {/* Show remaining balance if partial payment */}
+            {form.watch("paidAmount") > 0 && form.watch("paidAmount") < dueAmount && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-orange-800">Remaining Balance:</span>
+                  <span className="text-lg font-semibold text-orange-900">
+                    ₹{(dueAmount - form.watch("paidAmount")).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-xs text-orange-700 mt-1">
+                  This will be marked as a partial payment with outstanding balance.
+                </p>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="paymentMethod"

@@ -40,11 +40,19 @@ export interface Loan {
   customEmiAmount: number | null;
   flatMonthlyAmount: number | null;
   paymentType: string | null;
+  status: string; // 'active', 'completed', 'defaulted', 'cancelled'
   createdAt: Date | null;
+  
+  // Gold/Silver specific fields
+  pmType: string | null;
+  metalWeight: number | null;
+  purity: number | null;
+  netWeight: number | null;
+  amountPaid: number | null;
+  goldSilverNotes: string | null;
   
   // Extended properties
   borrowerName: string;
-  status: string;
   nextPayment: string;
 }
 
