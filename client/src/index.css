@@ -1,0 +1,214 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Responsive scaling for different screen sizes and DPI */
+:root {
+  /* Base font size that scales with viewport */
+  font-size: clamp(14px, 2.5vw, 18px);
+}
+
+html {
+  /* Smooth scaling across devices */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* High DPI / Retina display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  :root {
+    font-size: clamp(15px, 2.8vw, 19px);
+  }
+}
+
+/* Ultra-high DPI displays */
+@media (-webkit-min-device-pixel-ratio: 3), (min-resolution: 288dpi) {
+  :root {
+    font-size: clamp(16px, 3vw, 20px);
+  }
+}
+
+/* Small screens (phones) */
+@media (max-width: 640px) {
+  :root {
+    font-size: clamp(16px, 4vw, 18px);
+  }
+}
+
+/* Medium screens (tablets) */
+@media (min-width: 641px) and (max-width: 1024px) {
+  :root {
+    font-size: clamp(15px, 2.8vw, 17px);
+  }
+}
+
+/* Large screens (desktop) */
+@media (min-width: 1025px) {
+  :root {
+    font-size: clamp(14px, 1.2vw, 16px);
+  }
+}
+
+/* iOS-specific styles for payments table - black background with white text */
+@supports (-webkit-touch-callout: none) {
+  .ios-payments-table {
+    background-color: #000000 !important;
+    border-color: #333333 !important;
+  }
+  
+  .ios-payments-table table {
+    background-color: #000000 !important;
+  }
+  
+  .ios-payments-table thead tr {
+    border-color: #333333 !important;
+    background-color: #000000 !important;
+  }
+  
+  .ios-payments-table thead th {
+    color: #ffffff !important;
+    background-color: #000000 !important;
+    border-color: #333333 !important;
+  }
+  
+  .ios-payments-table tbody tr {
+    border-color: #333333 !important;
+    background-color: #000000 !important;
+  }
+  
+  .ios-payments-table tbody tr:hover {
+    background-color: #111111 !important;
+  }
+  
+  .ios-payments-table tbody td {
+    color: #ffffff !important;
+    background-color: #000000 !important;
+    border-color: #333333 !important;
+  }
+  
+  .ios-payments-table tbody td span {
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table tbody td div {
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table tbody td .font-medium {
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table tbody td .text-sm {
+    color: #ffffff !important;
+  }
+  
+  /* Enhanced button colors for iOS payment categories */
+  .ios-payments-table-sidebar .bg-blue-100 {
+    background-color: #1e40af !important; /* More vibrant blue */
+  }
+  
+  .ios-payments-table-sidebar .text-blue-700 {
+    color: #ffffff !important; /* White text on blue background */
+  }
+  
+  .ios-payments-table-sidebar .bg-green-100 {
+    background-color: #059669 !important; /* More vibrant green */
+  }
+  
+  .ios-payments-table-sidebar .text-green-700 {
+    color: #ffffff !important; /* White text on green background */
+  }
+  
+  /* Enhanced badge colors in table for iOS */
+  .ios-payments-table .bg-green-100 {
+    background-color: #059669 !important; /* Vibrant green for collected */
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .text-green-800 {
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .bg-blue-100 {
+    background-color: #1e40af !important; /* Vibrant blue for upcoming */
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .text-blue-800 {
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .bg-red-100 {
+    background-color: #dc2626 !important; /* Vibrant red for overdue */
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .text-red-800 {
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .bg-yellow-100 {
+    background-color: #d97706 !important; /* Vibrant orange for due soon */
+    color: #ffffff !important;
+  }
+  
+  .ios-payments-table .text-yellow-800 {
+    color: #ffffff !important;
+  }
+}
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 20 14.3% 4.1%;
+  --muted: 60 4.8% 95.9%;
+  --muted-foreground: 25 5.3% 44.7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 14.3% 4.1%;
+  --card: 0 0% 100%;
+  --card-foreground: 20 14.3% 4.1%;
+  --border: 20 5.9% 90%;
+  --input: 20 5.9% 90%;
+  --primary: 207 90% 54%;
+  --primary-foreground: 211 100% 99%;
+  --secondary: 60 4.8% 95.9%;
+  --secondary-foreground: 24 9.8% 10%;
+  --accent: 60 4.8% 95.9%;
+  --accent-foreground: 24 9.8% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 60 9.1% 97.8%;
+  --ring: 20 14.3% 4.1%;
+  --radius: 0.5rem;
+}
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+--muted-foreground: 240 5% 64.9%;
+--popover: 240 10% 3.9%;
+--popover-foreground: 0 0% 98%;
+--card: 240 10% 3.9%;
+--card-foreground: 0 0% 98%;
+--border: 240 3.7% 15.9%;
+--input: 240 3.7% 15.9%;
+--primary: 207 90% 54%;
+--primary-foreground: 211 100% 99%;
+--secondary: 240 3.7% 15.9%;
+--secondary-foreground: 0 0% 98%;
+--accent: 240 3.7% 15.9%;
+--accent-foreground: 0 0% 98%;
+--destructive: 0 62.8% 30.6%;
+--destructive-foreground: 0 0% 98%;
+--ring: 240 4.9% 83.9%;
+--radius: 0.5rem;
+  }
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}

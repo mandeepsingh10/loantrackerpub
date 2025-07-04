@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5009:5000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://loansight:loansight123@db:5432/loansight
+      - PGHOST=db
+      - PGPORT=5432
+      - PGUSER=loansight
+      - PGPASSWORD=loansight123
+      - PGDATABASE=loansight
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+      - /app/node_modules
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=loansight
+      - POSTGRES_USER=loansight
+      - POSTGRES_PASSWORD=loansight123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loansight -d loansight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
