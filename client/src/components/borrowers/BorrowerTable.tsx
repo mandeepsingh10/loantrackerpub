@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, Eye, ChevronDown, ChevronRight } from "lucide-react";
 import StatusBadge from "@/components/ui/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -17,8 +18,9 @@ import {
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/providers/AuthProvider";
-import { Borrower } from "@/types";
+import { Borrower, Loan } from "@/types";
 import BorrowerDetails from "./BorrowerDetails";
+import { LoanDetailsModal } from "./LoanDetailsModal";
 
 interface BorrowerTableProps {
   borrowers: Borrower[];
@@ -51,6 +53,9 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [confirmDeleteLoan, setConfirmDeleteLoan] = useState<{ borrowerId: number; loanId: number } | null>(null);
   const [selectedBorrower, setSelectedBorrower] = useState<number | null>(null);
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [selectedLoanNumber, setSelectedLoanNumber] = useState<number>(0);
+  const [showLoanDetailsModal, setShowLoanDetailsModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [expandedBorrowers, setExpandedBorrowers] = useState<Set<number>>(new Set());
   const [, navigate] = useLocation();
@@ -83,9 +88,13 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
           const response = await apiRequest("GET", `/api/borrowers/${borrower.id}/loans`);
           if (response.ok) {
             const loans = await response.json();
+            // Sort loans by ID (oldest first) to ensure sequential numbering
+            const sortedLoans = (loans || []).sort((a: any, b: any) => {
+              return a.id - b.id;
+            });
             borrowersWithLoansData.push({
               ...borrower,
-              loans: loans || []
+              loans: sortedLoans
             });
           } else {
             // If no loans found, add borrower with empty loans array
@@ -211,6 +220,12 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     setConfirmDelete(null);
     setConfirmDeleteLoan(null);
     setDeleteConfirmText("");
+  };
+
+  const handleViewLoan = (loan: Loan, loanNumber: number) => {
+    setSelectedLoan(loan);
+    setSelectedLoanNumber(loanNumber);
+    setShowLoanDetailsModal(true);
   };
 
   const toggleBorrowerExpansion = (borrowerId: number) => {
@@ -556,8 +571,8 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                         {loanIndex === 0 && isExpanded && (
                           <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="ml-10 font-medium text-white">
-                                Loan {loanIndex + 1}
+                              <div className="ml-10 font-bold text-white">
+                                • Loan {loanIndex + 1}
                               </div>
                             </td>
                             <td className="px-6 py-4">
@@ -605,7 +620,7 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                                 <Button 
                                   variant="ghost" 
                                   size="icon"
-                                  onClick={() => setSelectedBorrower(borrower.id)}
+                                  onClick={() => handleViewLoan(loan, loanIndex + 1)}
                                 >
                                   {isAdmin ? (
                                     <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
@@ -631,8 +646,8 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                         {isExpanded && loanIndex > 0 && (
                           <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="ml-10 font-medium text-white">
-                                Loan {loanIndex + 1}
+                              <div className="ml-10 font-bold text-white">
+                                • Loan {loanIndex + 1}
                               </div>
                             </td>
                             <td className="px-6 py-4">
@@ -680,7 +695,7 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                                 <Button 
                                   variant="ghost" 
                                   size="icon"
-                                  onClick={() => setSelectedBorrower(borrower.id)}
+                                  onClick={() => handleViewLoan(loan, loanIndex + 1)}
                                 >
                                   {isAdmin ? (
                                     <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
@@ -808,6 +823,14 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Loan Details Modal */}
+      <LoanDetailsModal
+        loan={selectedLoan}
+        loanNumber={selectedLoanNumber}
+        isOpen={showLoanDetailsModal}
+        onClose={() => setShowLoanDetailsModal(false)}
+      />
     </>
   );
 };

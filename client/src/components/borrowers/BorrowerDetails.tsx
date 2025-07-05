@@ -140,7 +140,11 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
       const res = await apiRequest("GET", `/api/loans/borrower/${borrowerId}`);
       const data = await res.json();
       console.log("Loan data:", data);
-      return data;
+      // Sort loans by ID (oldest first) for sequential numbering
+      const sortedLoans = (data || []).sort((a: any, b: any) => {
+        return a.id - b.id;
+      });
+      return sortedLoans;
     },
     enabled: isOpen && borrowerId > 0,
   });

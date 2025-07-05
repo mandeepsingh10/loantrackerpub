@@ -61,6 +61,10 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
         status: loan.status || "active",
         borrowerName: loan.borrowerName || ""
       }));
+      // Sort loans by ID (oldest first) for sequential numbering
+      data = data.sort((a: any, b: any) => {
+        return a.id - b.id;
+      });
       console.log("Loans data received:", data);
       return data;
     },
@@ -231,7 +235,7 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredLoans.map((loan: Loan) => (
+                {filteredLoans.map((loan: Loan, index: number) => (
                   <div
                     key={loan.id}
                     className="border rounded-lg p-4 hover:shadow-md transition-shadow"
@@ -240,7 +244,7 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
                       <div className="flex items-center space-x-3">
                         {getStatusIcon(loan.status)}
                         <div>
-                          <h3 className="font-medium">Loan #{loan.id}</h3>
+                          <h3 className="font-medium">Loan {index + 1}</h3>
                           <p className="text-sm text-gray-500">
                             Started {format(new Date(loan.startDate), "MMM d, yyyy")}
                           </p>

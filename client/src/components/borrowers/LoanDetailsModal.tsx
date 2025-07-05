@@ -51,11 +51,12 @@ import { Loan, Payment } from "@/types";
 
 interface LoanDetailsModalProps {
   loan: Loan | null;
+  loanNumber?: number;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProps) => {
+export const LoanDetailsModal = ({ loan, loanNumber, isOpen, onClose }: LoanDetailsModalProps) => {
   const { toast } = useToast();
 
   // Payment collection dialog state
@@ -480,7 +481,7 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
               <div className="flex items-center justify-between gap-3 w-full">
                 <div className="flex items-center gap-3">
                   {getStatusIcon(loan.status)}
-                  <span>Payment Schedule - Loan #{loan.id}</span>
+                  <span>Payment Schedule - Loan {loanNumber || loan?.id}</span>
                 </div>
                 <div className="flex items-center gap-3 mr-8">
                   {(loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver') ? (

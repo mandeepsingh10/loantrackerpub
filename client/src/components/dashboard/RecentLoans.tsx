@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,9 +65,9 @@ const RecentLoans = () => {
     return acc;
   }, []);
 
-  // Sort loans within each borrower by creation date (most recent first)
+  // Sort loans within each borrower by ID (oldest first) for sequential numbering
   groupedLoans.forEach(borrower => {
-    borrower.loans.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    borrower.loans.sort((a, b) => a.id - b.id);
   });
 
   if (isLoading) {
@@ -282,8 +283,8 @@ const RecentLoans = () => {
                           {loanIndex === 0 && isExpanded && (
                             <tr key={`${borrower.borrowerId}-${loan.id}`} className="hover:bg-[#111111]">
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="ml-10 font-medium text-white">
-                                  Loan {loanIndex + 1}
+                                <div className="ml-10 font-bold text-white">
+                                  • Loan {loanIndex + 1}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-white">
@@ -336,8 +337,8 @@ const RecentLoans = () => {
                           {isExpanded && loanIndex > 0 && (
                             <tr key={`${borrower.borrowerId}-${loan.id}`} className="hover:bg-[#111111]">
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="ml-10 font-medium text-white">
-                                  Loan {loanIndex + 1}
+                                <div className="ml-10 font-bold text-white">
+                                  • Loan {loanIndex + 1}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-white">
