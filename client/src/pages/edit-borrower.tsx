@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -72,10 +72,6 @@ export default function EditBorrower() {
   // Update form when borrower data loads
   useEffect(() => {
     if (borrower) {
-      console.log("Updating form with borrower data:", borrower);
-      console.log("ID Number from borrower:", borrower.idNumber);
-      
-      // Use reset instead of setValue to ensure all fields update properly
       form.reset({
         name: borrower.name || "",
         phone: borrower.phone || "",
@@ -87,7 +83,6 @@ export default function EditBorrower() {
         guarantorAddress: borrower.guarantorAddress || "",
       });
       
-      // Set photo URL if exists
       if (borrower.photoUrl) {
         setPhotoPreviewUrl(borrower.photoUrl);
       }
@@ -97,7 +92,6 @@ export default function EditBorrower() {
   // Update borrower mutation
   const updateBorrowerMutation = useMutation({
     mutationFn: async (data: EditBorrowerFormValues) => {
-      // If there's a new photo, upload it first
       let photoUrl = borrower?.photoUrl || null;
       if (selectedPhoto) {
         const formData = new FormData();
@@ -110,7 +104,6 @@ export default function EditBorrower() {
         }
       }
       
-      // Add photo URL to borrower data
       const borrowerData = {
         ...data,
         photoUrl
@@ -125,10 +118,7 @@ export default function EditBorrower() {
         description: "Borrower details have been successfully updated.",
       });
       
-      // Refresh borrower data
       queryClient.invalidateQueries({ queryKey: ["/api/borrowers"], exact: false });
-      
-      // Navigate back to borrowers page
       navigate("/borrowers");
     },
     onError: (error) => {
@@ -163,7 +153,7 @@ export default function EditBorrower() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Full-screen header with navigation */}
+      {/* Header */}
       <div className="bg-gray-900 border-b border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -191,20 +181,20 @@ export default function EditBorrower() {
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="container mx-auto px-6 py-8">
-        {/* Loan Information Card */}
-        {loans && loans.length > 0 ? (
-          <Card className="max-w-3xl mx-auto mb-6 bg-gray-900 border-gray-700">
-            <CardHeader className="bg-gray-800 border-b border-gray-700">
-              <CardTitle className="text-white text-xl flex items-center">
+      {/* Content */}
+      <div className="container mx-auto px-6 -mt-4">
+        {/* Loan Information */}
+        {loans && loans.length > 0 && (
+          <Card className="max-w-3xl mx-auto mb-4 bg-gray-900 border-gray-700">
+            <div className="bg-gray-800 border-b border-gray-700 py-3 px-4">
+              <div className="text-white text-lg font-semibold flex items-center">
                 <CreditCard className="h-5 w-5 mr-2" />
                 Loan Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
+              </div>
+            </div>
+            <CardContent className="p-4">
               {loans.map((loan: any, index: number) => (
-                <div key={loan.id} className={`${index > 0 ? 'border-t border-gray-700 pt-4 mt-4' : ''}`}>
+                <div key={loan.id} className={`${index > 0 ? 'border-t border-gray-700 pt-3 mt-3' : ''}`}>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <Label className="text-gray-400 text-sm">Loan Amount</Label>
@@ -233,25 +223,26 @@ export default function EditBorrower() {
               ))}
             </CardContent>
           </Card>
-        ) : null}
+        )}
 
+        {/* Borrower Form */}
         <Card className="max-w-3xl mx-auto bg-gray-900 border-gray-700">
-          <CardHeader className="bg-gray-800 border-b border-gray-700">
-            <CardTitle className="text-white text-xl">Update Borrower Information</CardTitle>
-          </CardHeader>
-          <CardContent className="p-8">
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Photo Upload Section */}
+          <div className="bg-gray-800 border-b border-gray-700 py-3 px-4">
+            <div className="text-white text-lg font-semibold">Update Borrower Information</div>
+          </div>
+          <CardContent className="p-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {/* Photo Upload */}
               <PhotoUpload
                 currentPhotoUrl={borrower?.photoUrl}
                 onPhotoChange={(file, previewUrl) => {
                   setSelectedPhoto(file);
                   setPhotoPreviewUrl(previewUrl || null);
                 }}
-                className="mb-6"
               />
 
-              <div className="grid gap-6">
+              {/* Basic Information */}
+              <div className="grid gap-4">
                 <div>
                   <Label htmlFor="name" className="text-white">Full Name *</Label>
                   <Input
@@ -323,46 +314,47 @@ export default function EditBorrower() {
                     <p className="text-xs text-gray-400 mt-1">ID number cannot be changed</p>
                   </div>
                 </div>
+              </div>
 
-                {/* Guarantor Section */}
-                <div className="border-t border-gray-700 pt-6">
-                  <h3 className="text-lg font-medium text-white mb-4">Guarantor Details (Optional)</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="guarantorName" className="text-white">Guarantor Name</Label>
-                      <Input
-                        id="guarantorName"
-                        {...form.register("guarantorName")}
-                        className="mt-1 bg-gray-800 border-gray-600 text-white"
-                        placeholder="Enter guarantor's full name"
-                      />
-                    </div>
+              {/* Guarantor Section */}
+              <div className="border-t border-gray-700 pt-4">
+                <h3 className="text-lg font-medium text-white mb-3">Guarantor Details (Optional)</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="guarantorName" className="text-white">Guarantor Name</Label>
+                    <Input
+                      id="guarantorName"
+                      {...form.register("guarantorName")}
+                      className="mt-1 bg-gray-800 border-gray-600 text-white"
+                      placeholder="Enter guarantor's full name"
+                    />
+                  </div>
 
-                    <div>
-                      <Label htmlFor="guarantorPhone" className="text-white">Guarantor Phone</Label>
-                      <Input
-                        id="guarantorPhone"
-                        {...form.register("guarantorPhone")}
-                        className="mt-1 bg-gray-800 border-gray-600 text-white"
-                        placeholder="Enter guarantor's phone number"
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="guarantorPhone" className="text-white">Guarantor Phone</Label>
+                    <Input
+                      id="guarantorPhone"
+                      {...form.register("guarantorPhone")}
+                      className="mt-1 bg-gray-800 border-gray-600 text-white"
+                      placeholder="Enter guarantor's phone number"
+                    />
+                  </div>
 
-                    <div>
-                      <Label htmlFor="guarantorAddress" className="text-white">Guarantor Address</Label>
-                      <Textarea
-                        id="guarantorAddress"
-                        {...form.register("guarantorAddress")}
-                        className="mt-1 bg-gray-800 border-gray-600 text-white"
-                        placeholder="Enter guarantor's complete address"
-                        rows={3}
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="guarantorAddress" className="text-white">Guarantor Address</Label>
+                    <Textarea
+                      id="guarantorAddress"
+                      {...form.register("guarantorAddress")}
+                      className="mt-1 bg-gray-800 border-gray-600 text-white"
+                      placeholder="Enter guarantor's complete address"
+                      rows={3}
+                    />
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+              {/* Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
                 <Button
                   type="button"
                   variant="outline"

@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Camera, Upload, X, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -59,68 +58,64 @@ const PhotoUpload = ({ currentPhotoUrl, onPhotoChange, className = "" }: PhotoUp
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-3 ${className}`}>
       <div className="flex items-center gap-2">
         <Camera className="h-5 w-5 text-blue-400" />
         <h3 className="text-lg font-semibold text-white">Borrower Photo</h3>
       </div>
       
-      <Card className="bg-gray-900 border-gray-700">
-        <CardContent className="p-6">
-          <div className="flex flex-col items-center space-y-4">
-            {/* Photo Preview */}
+      <div className="flex flex-col items-center space-y-3">
+        {/* Photo Preview */}
+        <div className="relative">
+          {previewUrl ? (
             <div className="relative">
-              {previewUrl ? (
-                <div className="relative">
-                  <img
-                    src={previewUrl}
-                    alt="Borrower photo"
-                    className="w-32 h-32 rounded-full object-cover border-2 border-gray-600"
-                  />
-                  <button
-                    onClick={handleRemovePhoto}
-                    className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 transition-colors"
-                    title="Remove photo"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-32 h-32 rounded-full bg-gray-800 border-2 border-dashed border-gray-600 flex items-center justify-center">
-                  <User className="h-12 w-12 text-gray-400" />
-                </div>
-              )}
-            </div>
-
-            {/* Upload Button */}
-            <div className="flex flex-col items-center space-y-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleUploadClick}
-                disabled={isUploading}
-                className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+              <img
+                src={previewUrl}
+                alt="Borrower photo"
+                className="w-32 h-32 rounded-full object-cover border-2 border-gray-600"
+              />
+              <button
+                onClick={handleRemovePhoto}
+                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 transition-colors"
+                title="Remove photo"
               >
-                <Upload className="h-4 w-4 mr-2" />
-                {previewUrl ? "Change Photo" : "Upload Photo"}
-              </Button>
-              
-              <p className="text-xs text-gray-400 text-center">
-                JPG, PNG up to 5MB
-              </p>
+                <X className="h-4 w-4" />
+              </button>
             </div>
+          ) : (
+            <div className="w-32 h-32 rounded-full bg-gray-800 border-2 border-dashed border-gray-600 flex items-center justify-center">
+              <User className="h-12 w-12 text-gray-400" />
+            </div>
+          )}
+        </div>
 
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-          </div>
-        </CardContent>
-      </Card>
+        {/* Upload Button */}
+        <div className="flex flex-col items-center space-y-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleUploadClick}
+            disabled={isUploading}
+            className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {previewUrl ? "Change Photo" : "Upload Photo"}
+          </Button>
+          
+          <p className="text-xs text-gray-400 text-center">
+            JPG, PNG up to 5MB
+          </p>
+        </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+      </div>
     </div>
   );
 };

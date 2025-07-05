@@ -65,9 +65,10 @@ export const AddLoanModal = ({ borrowerId, isOpen, onClose }: AddLoanModalProps)
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="bg-transparent">
           <DialogTitle>Add New Loan</DialogTitle>
         </DialogHeader>
+        <div className="border-t border-gray-700 my-4"></div>
         
         <LoanForm 
           borrowerId={borrowerId}

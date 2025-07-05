@@ -780,80 +780,80 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-[95vw] max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] bg-black border-gray-700">
-          <DialogHeader className="bg-gray-900 -m-6 mb-4 p-4 border-b border-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                {borrower && borrower.photoUrl ? (
-                  // Show uploaded photo with dropdown menu
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <div className="cursor-pointer">
-                        <img
-                          src={borrower.photoUrl}
-                          alt={`${borrower.name}'s photo`}
-                          className="w-12 h-12 rounded-lg object-cover border-2 border-gray-600"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuItem onClick={() => setShowPhotoPreview(true)}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Photo
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Change Photo
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  // Show camera icon with dropdown menu
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-500 cursor-pointer hover:border-gray-400 hover:bg-gray-700 transition-colors">
-                        <Camera className="h-4 w-4 text-gray-400" />
-                      </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Photo
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                {isUploadingPhoto && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
-                    <div className="text-white text-xs">...</div>
-                  </div>
-                )}
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                  disabled={isUploadingPhoto}
-                />
-              </div>
-              <DialogTitle className="text-lg text-white">
-                {borrower ? borrower.name : "Borrower Details"}
-              </DialogTitle>
-            </div>
-          </DialogHeader>
-          
-          <div className="overflow-y-auto max-h-[calc(95vh-80px)] text-white p-6">
+          <div className="overflow-y-auto max-h-[95vh] text-white p-6">
             {isLoading ? (
               <div className="flex items-center justify-center h-40">
                 <p className="text-gray-300">Loading...</p>
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Borrower Name and Photo */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="relative">
+                    {borrower && borrower.photoUrl ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <div className="cursor-pointer">
+                            <img
+                              src={borrower.photoUrl}
+                              alt={`${borrower.name}'s photo`}
+                              className="w-12 h-12 rounded-lg object-cover border-2 border-gray-600"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                          <DropdownMenuItem onClick={() => setShowPhotoPreview(true)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Photo
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Change Photo
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <div className="flex items-center justify-center w-12 h-12 rounded-lg border-2 border-gray-600 cursor-pointer hover:border-gray-400 hover:bg-gray-700 transition-colors">
+                            <Camera className="h-6 w-6 text-gray-400" />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                          <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload Photo
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    {isUploadingPhoto && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+                        <div className="text-white text-xs">...</div>
+                      </div>
+                    )}
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      disabled={isUploadingPhoto}
+                    />
+                  </div>
+                  <div className="text-xl font-bold text-white">
+                    {borrower ? borrower.name : "Borrower Details"}
+                  </div>
+                </div>
+                
+                {/* Separator */}
+                <div className="border-t border-gray-700 my-4"></div>
+                
               {/* Borrower Details */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
@@ -1173,7 +1173,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
               </div>
 
               {/* Notes Card */}
-              <Card className="bg-black border-gray-700">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-lg font-bold text-white">Notes</CardTitle>
                   <Button

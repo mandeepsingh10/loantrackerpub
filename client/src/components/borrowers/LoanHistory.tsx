@@ -169,40 +169,34 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
                           </p>
                         </div>
                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm items-center">
                       <div className="flex items-center space-x-2">
+                        <DollarSign className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium">{formatCurrency(loan.amount)}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-4 w-4 text-gray-500" />
+                        <span>{getLoanStrategyDisplay(loan.loanStrategy)}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Clock className="h-4 w-4 text-gray-500" />
+                        <span>{loan.tenure ? `${loan.tenure} months` : 'NA'}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 justify-between md:justify-end w-full">
+                        <span className="text-gray-500">Next:</span>
+                        <span className="font-medium">{loan.nextPayment}</span>
+                        <span className="flex-1"></span>
                         {activeTab === "all" && getStatusBadge(loan.status)}
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => onViewLoan(loan)}
+                          className="flex items-center ml-2"
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           View
                         </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">{formatCurrency(loan.amount)}</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span>{getLoanStrategyDisplay(loan.loanStrategy)}</span>
-                      </div>
-                      
-                      {loan.tenure && (
-                        <div className="flex items-center space-x-2">
-                          <Clock className="h-4 w-4 text-gray-500" />
-                          <span>{loan.tenure} months</span>
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-500">Next:</span>
-                        <span className="font-medium">{loan.nextPayment}</span>
                       </div>
                     </div>
                   </div>

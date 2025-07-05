@@ -264,7 +264,7 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h4 className="font-medium text-slate-800 mb-4">Loan Details</h4>
+            <h4 className="font-medium text-white mb-4">Loan Details</h4>
             <div className="space-y-4">
               <FormField
                 control={form.control}
@@ -335,7 +335,7 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
           </div>
 
           <div>
-            <h4 className="font-medium text-slate-800 mb-4">Payment Information</h4>
+            <h4 className="font-medium text-white mb-4">Payment Information</h4>
             <div className="space-y-4">
               {loanStrategy === "emi" && (
                 <>
@@ -388,7 +388,7 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
                     />
                     <label
                       htmlFor="show-calculator"
-                      className="text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-2"
+                      className="text-sm font-medium text-white cursor-pointer flex items-center gap-2"
                     >
                       <Calculator className="h-4 w-4" />
                       Use EMI Calculator
@@ -488,8 +488,8 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
               )}
 
               {loanStrategy === "custom" && (
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <p className="text-gray-600">
+                <div className="text-center p-4 bg-gray-800 border border-gray-600 rounded-lg">
+                  <p className="text-gray-300">
                     For custom loans, payments will be added manually after loan creation.
                   </p>
                 </div>
@@ -585,8 +585,8 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
                     />
                   </div>
 
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-600">
+                  <div className="text-center p-4 bg-gray-800 border border-gray-600 rounded-lg">
+                    <p className="text-gray-300">
                       For gold & silver loans, payments will be added manually after loan creation.
                     </p>
                   </div>
@@ -603,7 +603,7 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
               name="goldSilverNotes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-lg font-bold text-slate-800">Notes</FormLabel>
+                  <FormLabel className="text-lg font-bold text-white">Notes</FormLabel>
                   <FormControl>
                     <textarea
                       rows={4}

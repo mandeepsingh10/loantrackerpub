@@ -26,6 +26,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   DollarSign, 
   Calendar, 
@@ -71,6 +77,20 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [deletePayment, setDeletePayment] = useState<Payment | null>(null);
 
+  // Add payment dialogs state
+  const [showAddSinglePayment, setShowAddSinglePayment] = useState(false);
+  const [showAddBulkPayments, setShowAddBulkPayments] = useState(false);
+  const [singlePaymentForm, setSinglePaymentForm] = useState({
+    amount: "",
+    dueDate: format(new Date(), 'yyyy-MM-dd'),
+    notes: ""
+  });
+  const [bulkPaymentForm, setBulkPaymentForm] = useState({
+    months: 1,
+    customAmount: "",
+    customDueDate: format(new Date(), 'yyyy-MM-dd')
+  });
+
   // Fetch payments for this specific loan
   const { data: payments = [], isLoading: paymentsLoading } = useQuery({
     queryKey: ["/api/payments", "loan", loan?.id],
@@ -88,6 +108,70 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
       });
     },
     enabled: isOpen && !!loan,
+  });
+
+  // Add single payment mutation
+  const addSinglePaymentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", `/api/loans/${loan?.id}/payments/custom`, {
+        amount: parseFloat(data.amount),
+        dueDate: data.dueDate,
+        notes: data.notes
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Payment added successfully.",
+      });
+      setShowAddSinglePayment(false);
+      setSinglePaymentForm({
+        amount: "",
+        dueDate: format(new Date(), 'yyyy-MM-dd'),
+        notes: ""
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments", "loan", loan?.id] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to add payment: ${error}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add bulk payments mutation
+  const addBulkPaymentsMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", `/api/payments/bulk/${loan?.id}`, {
+        months: data.months,
+        customAmount: data.customAmount ? parseFloat(data.customAmount) : undefined,
+        customDueDate: data.customDueDate
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Successfully added ${data.length} payment(s) to the schedule.`,
+      });
+      setShowAddBulkPayments(false);
+      setBulkPaymentForm({
+        months: 1,
+        customAmount: "",
+        customDueDate: format(new Date(), 'yyyy-MM-dd')
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments", "loan", loan?.id] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to add payments: ${error}`,
+        variant: "destructive",
+      });
+    },
   });
 
   // Collect payment mutation
@@ -200,30 +284,6 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
     },
   });
 
-  // Update loan status mutation
-  const updateLoanStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      const response = await apiRequest("PATCH", `/api/loans/${loan?.id}`, { status });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/borrowers", loan?.borrowerId, "loans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/loans", loan?.borrowerId] });
-      toast({
-        title: "Loan Status Updated",
-        description: `Loan has been marked as ${status}.`,
-      });
-      onClose();
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to update loan status: ${error}`,
-        variant: "destructive",
-      });
-    },
-  });
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -236,15 +296,15 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "active":
-        return <Clock className="h-4 w-4 text-blue-600" />;
+        return <Clock className="h-5 w-5 text-blue-600" />;
       case "completed":
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
       case "defaulted":
-        return <AlertCircle className="h-4 w-4 text-red-600" />;
+        return <AlertCircle className="h-5 w-5 text-red-600" />;
       case "cancelled":
-        return <XCircle className="h-4 w-4 text-gray-600" />;
+        return <XCircle className="h-5 w-5 text-gray-600" />;
       default:
-        return <Clock className="h-4 w-4 text-blue-600" />;
+        return <Clock className="h-5 w-5 text-blue-600" />;
     }
   };
 
@@ -278,15 +338,11 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
     }
   };
 
-  // Payment status helper functions
   const getActualPaymentStatus = (payment: Payment) => {
-    if (payment.status === "collected") {
-      return "collected";
-    }
+    if (payment.status === "collected") return "collected";
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     const dueDate = new Date(payment.dueDate);
     dueDate.setHours(0, 0, 0, 0);
     
@@ -295,68 +351,58 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
     } else if (dueDate.getTime() === today.getTime()) {
       return "due_today";
     } else {
-      const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 3) {
-        return "due_soon";
-      }
       return "upcoming";
     }
   };
 
   const getPaymentStatusIcon = (payment: Payment) => {
-    const actualStatus = getActualPaymentStatus(payment);
-    switch (actualStatus) {
+    const status = getActualPaymentStatus(payment);
+    switch (status) {
       case "collected":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case "missed":
         return <AlertCircle className="h-4 w-4 text-red-600" />;
       case "due_today":
-        return <AlertCircle className="h-4 w-4 text-orange-600" />;
-      case "due_soon":
-        return <Clock className="h-4 w-4 text-yellow-600" />;
+        return <Clock className="h-4 w-4 text-orange-600" />;
       default:
         return <Clock className="h-4 w-4 text-blue-600" />;
     }
   };
 
   const getPaymentStatusColor = (payment: Payment) => {
-    const actualStatus = getActualPaymentStatus(payment);
-    switch (actualStatus) {
+    const status = getActualPaymentStatus(payment);
+    switch (status) {
       case "collected":
         return "bg-green-100 text-green-800";
       case "missed":
         return "bg-red-100 text-red-800";
       case "due_today":
         return "bg-orange-100 text-orange-800";
-      case "due_soon":
-        return "bg-yellow-100 text-yellow-800";
       default:
         return "bg-blue-100 text-blue-800";
     }
   };
 
   const getPaymentStatusText = (payment: Payment) => {
-    const actualStatus = getActualPaymentStatus(payment);
-    switch (actualStatus) {
+    const status = getActualPaymentStatus(payment);
+    switch (status) {
       case "collected":
         return "Collected";
       case "missed":
         return "Missed";
       case "due_today":
         return "Due Today";
-      case "due_soon":
-        return "Due Soon";
       default:
         return "Upcoming";
     }
   };
 
-  // Payment action handlers
   const handleCollectPayment = (payment: Payment) => {
     setSelectedPayment(payment);
-    // Set default amount to the remaining due amount, or full amount if no partial payment
-    const defaultAmount = payment.dueAmount > 0 ? payment.dueAmount : payment.amount;
-    setPaymentAmount(defaultAmount.toString());
+    setPaymentAmount(payment.amount.toString());
+    setPaymentMethod("cash");
+    setPaymentNotes("");
+    setUpiId("");
     setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
     setCollectionDialog(true);
   };
@@ -366,6 +412,7 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
     
     const paidAmount = parseFloat(paymentAmount);
     
+    // Prepare notes - include UPI ID if UPI payment method is selected
     let finalNotes = paymentNotes;
     if (paymentMethod === "upi" && upiId.trim()) {
       finalNotes = finalNotes ? `${paymentNotes}\nUPI ID: ${upiId}` : `UPI ID: ${upiId}`;
@@ -388,15 +435,7 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
   };
 
   const handleSubmitSettlement = () => {
-    if (!settlementDate) {
-      toast({
-        title: "Date Required",
-        description: "Please select a settlement date.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+    if (!settlementPayment || !settlementDate) return;
     settlementMutation.mutate();
   };
 
@@ -404,7 +443,8 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
     setSelectedPayment(payment);
     setPaymentAmount(payment.paidAmount?.toString() || "");
     setPaymentMethod(payment.paymentMethod || "cash");
-    setPaymentNotes(""); // Always start with empty notes when editing
+    setPaymentNotes(payment.notes || "");
+    // Set the payment date from the existing payment's paidDate, or current date if not available
     if (payment.paidDate) {
       setPaymentDate(format(new Date(payment.paidDate), 'yyyy-MM-dd'));
     } else {
@@ -425,9 +465,8 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
   };
 
   const handleUpdateStatus = (status: string) => {
-    if (loan) {
-      updateLoanStatusMutation.mutate(status);
-    }
+    // This function can be used to update loan status if needed
+    console.log("Update status to:", status);
   };
 
   if (!loan) return null;
@@ -443,7 +482,41 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
                   {getStatusIcon(loan.status)}
                   <span>Payment Schedule - Loan #{loan.id}</span>
                 </div>
-                <div className="mr-8">{getStatusBadge(loan.status)}</div>
+                <div className="flex items-center gap-3 mr-8">
+                  {(loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver') ? (
+                    <Button 
+                      size="sm"
+                      onClick={() => setShowAddSinglePayment(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Payment
+                    </Button>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Payments
+                          <ChevronDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setShowAddSinglePayment(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Single Payment
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setShowAddBulkPayments(true)}>
+                          <Calendar className="h-4 w-4 mr-2" />
+                          Add X Months
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
               </div>
             </DialogTitle>
           </DialogHeader>
@@ -458,8 +531,8 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
                 <p className="text-gray-500">No payments found for this loan.</p>
               </div>
             ) : (
-                            <div className="overflow-x-auto">
-                  <Table>
+              <div className="overflow-x-auto">
+                <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Due Date</TableHead>
@@ -568,6 +641,150 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Single Payment Dialog */}
+      <Dialog open={showAddSinglePayment} onOpenChange={setShowAddSinglePayment}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Single Payment</DialogTitle>
+            <DialogDescription>
+              Add a custom payment to this loan. If the payment date is today or earlier, it will be marked as completed automatically.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="single-amount">Payment Amount (₹)</Label>
+              <Input
+                id="single-amount"
+                type="number"
+                placeholder="Enter payment amount"
+                value={singlePaymentForm.amount}
+                onChange={(e) => setSinglePaymentForm({
+                  ...singlePaymentForm, 
+                  amount: e.target.value
+                })}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="single-payment-date">Payment Date</Label>
+              <Input
+                id="single-payment-date"
+                type="date"
+                value={singlePaymentForm.dueDate}
+                onChange={(e) => setSinglePaymentForm({
+                  ...singlePaymentForm, 
+                  dueDate: e.target.value
+                })}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="single-notes">Notes (Optional)</Label>
+              <Textarea
+                id="single-notes"
+                placeholder="Add any notes about this payment"
+                value={singlePaymentForm.notes}
+                onChange={(e) => setSinglePaymentForm({
+                  ...singlePaymentForm, 
+                  notes: e.target.value
+                })}
+                rows={3}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={() => {
+                if (singlePaymentForm.amount && singlePaymentForm.dueDate) {
+                  addSinglePaymentMutation.mutate(singlePaymentForm);
+                }
+              }}
+              disabled={addSinglePaymentMutation.isPending || !singlePaymentForm.amount || !singlePaymentForm.dueDate}
+            >
+              {addSinglePaymentMutation.isPending ? "Adding..." : "Add Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Bulk Payments Dialog */}
+      <Dialog open={showAddBulkPayments} onOpenChange={setShowAddBulkPayments}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Multiple Payments</DialogTitle>
+            <DialogDescription>
+              Add multiple payments to this loan schedule. You can specify the number of months and optionally a custom amount.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="bulk-months">Number of Months</Label>
+              <Input
+                id="bulk-months"
+                type="number"
+                min="1"
+                max="60"
+                placeholder="Enter number of months"
+                value={bulkPaymentForm.months}
+                onChange={(e) => setBulkPaymentForm({
+                  ...bulkPaymentForm, 
+                  months: parseInt(e.target.value) || 1
+                })}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="bulk-custom-amount">Custom Amount (Optional)</Label>
+              <Input
+                id="bulk-custom-amount"
+                type="number"
+                placeholder="Leave empty to use loan's default EMI"
+                value={bulkPaymentForm.customAmount}
+                onChange={(e) => setBulkPaymentForm({
+                  ...bulkPaymentForm, 
+                  customAmount: e.target.value
+                })}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="bulk-start-date">Start Date</Label>
+              <Input
+                id="bulk-start-date"
+                type="date"
+                value={bulkPaymentForm.customDueDate}
+                onChange={(e) => setBulkPaymentForm({
+                  ...bulkPaymentForm, 
+                  customDueDate: e.target.value
+                })}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={() => {
+                if (bulkPaymentForm.months > 0 && bulkPaymentForm.customDueDate) {
+                  addBulkPaymentsMutation.mutate(bulkPaymentForm);
+                }
+              }}
+              disabled={addBulkPaymentsMutation.isPending || bulkPaymentForm.months <= 0 || !bulkPaymentForm.customDueDate}
+            >
+              {addBulkPaymentsMutation.isPending ? "Adding..." : "Add Payments"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -722,21 +939,21 @@ export const LoanDetailsModal = ({ loan, isOpen, onClose }: LoanDetailsModalProp
 
       {/* Delete Payment Confirmation Dialog */}
       <Dialog open={deleteDialog} onOpenChange={setDeleteDialog}>
-        <DialogContent className="sm:max-w-md bg-black border-gray-700">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-red-400">Delete Payment</DialogTitle>
-            <DialogDescription className="text-gray-300">
+            <DialogTitle className="text-red-600">Delete Payment</DialogTitle>
+            <DialogDescription>
               {deletePayment && (
                 <>
                   Are you sure you want to permanently delete this payment?
-                  <div className="mt-3 p-3 bg-red-900/20 border border-red-700 rounded-md">
-                    <div className="text-sm text-gray-200">
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <div className="text-sm text-gray-900">
                       <p><strong>Amount:</strong> {formatCurrency(deletePayment.amount)}</p>
                       <p><strong>Due Date:</strong> {format(new Date(deletePayment.dueDate), "MMM d, yyyy")}</p>
                       <p><strong>Status:</strong> <span className="capitalize">{deletePayment.status.replace('_', ' ')}</span></p>
                     </div>
                   </div>
-                  <p className="text-red-400 font-medium mt-3">
+                  <p className="text-red-600 font-medium mt-3">
                     ⚠️ This action cannot be undone.
                   </p>
                 </>
