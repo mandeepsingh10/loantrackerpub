@@ -278,12 +278,12 @@ const RecentLoans = () => {
                             </tr>
                           )}
                           
-                          {/* Loan 1 row - only show when expanded */}
+                          {/* Loan details row - only show when expanded */}
                           {loanIndex === 0 && isExpanded && (
                             <tr key={`${borrower.borrowerId}-${loan.id}`} className="hover:bg-[#111111]">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="ml-10 font-medium text-white">
-                                  Loan 1
+                                  Loan {loanIndex + 1}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-white">

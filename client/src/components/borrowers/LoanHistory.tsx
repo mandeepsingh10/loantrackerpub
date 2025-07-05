@@ -1,14 +1,25 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Plus, 
   Eye, 
+  Trash2,
   DollarSign, 
   Calendar, 
   Clock,
@@ -17,6 +28,9 @@ import {
   XCircle
 } from "lucide-react";
 import { Loan } from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/providers/AuthProvider";
+import { apiRequest } from "@/lib/queryClient";
 
 interface LoanHistoryProps {
   borrowerId: number;
@@ -26,9 +40,13 @@ interface LoanHistoryProps {
 
 export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryProps) => {
   const [activeTab, setActiveTab] = useState<"active" | "completed" | "all">("active");
+  const [confirmDeleteLoan, setConfirmDeleteLoan] = useState<number | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   // Fetch all loans for this borrower
-  const { data: loans = [], isLoading } = useQuery({
+  const { data: loans = [], isLoading, error } = useQuery({
     queryKey: ["/api/borrowers", borrowerId, "loans"],
     queryFn: async () => {
       console.log("Fetching loans for borrower:", borrowerId);
@@ -36,9 +54,37 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
       if (!response.ok) {
         throw new Error("Failed to fetch loans");
       }
-      const data = await response.json();
+      let data = await response.json();
+      // Patch: ensure each loan has status and borrowerName
+      data = data.map((loan: any) => ({
+        ...loan,
+        status: loan.status || "active",
+        borrowerName: loan.borrowerName || ""
+      }));
       console.log("Loans data received:", data);
       return data;
+    },
+  });
+
+  // Delete loan mutation
+  const deleteLoanMutation = useMutation({
+    mutationFn: async (loanId: number) => {
+      await apiRequest("DELETE", `/api/loans/${loanId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/borrowers", borrowerId, "loans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/borrowers", "with-loans"] });
+      toast({
+        title: "Loan Deleted",
+        description: "The loan has been deleted successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to delete loan: ${error}`,
+        variant: "destructive",
+      });
     },
   });
 
@@ -110,10 +156,40 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
     }).format(amount);
   };
 
+  const handleDeleteLoanConfirm = () => {
+    if (confirmDeleteLoan && deleteConfirmText.toLowerCase() === 'delete') {
+      deleteLoanMutation.mutate(confirmDeleteLoan);
+      setConfirmDeleteLoan(null);
+      setDeleteConfirmText("");
+    }
+  };
+
+  const handleDeleteDialogClose = () => {
+    setConfirmDeleteLoan(null);
+    setDeleteConfirmText("");
+  };
+
   const filteredLoans = getFilteredLoans();
   console.log("All loans:", loans);
   console.log("Filtered loans:", filteredLoans);
   console.log("Active tab:", activeTab);
+  console.log("isAdmin:", isAdmin);
+
+  if (error) {
+    console.error("LoanHistory error:", error);
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Loan History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <p className="text-red-500">Error loading loans: {String(error.message || error)}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -134,6 +210,7 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
     <Card>
       <CardHeader className="pb-4">
         <CardTitle>Loan History</CardTitle>
+        <div className="text-xs text-gray-500">Debug: isAdmin = {isAdmin ? 'true' : 'false'}</div>
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
@@ -188,15 +265,28 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
                         <span className="font-medium">{loan.nextPayment}</span>
                         <span className="flex-1"></span>
                         {activeTab === "all" && getStatusBadge(loan.status)}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onViewLoan(loan)}
-                          className="flex items-center ml-2"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onViewLoan(loan)}
+                            className="flex items-center"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setConfirmDeleteLoan(loan.id)}
+                              className="flex items-center text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -206,6 +296,46 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      {/* Delete Loan Confirmation Dialog */}
+      <AlertDialog open={confirmDeleteLoan !== null} onOpenChange={handleDeleteDialogClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Loan</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this specific loan. The borrower will remain, but this loan and all its associated payment data will be removed.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Type "delete" to confirm:
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              placeholder="Type 'delete' to confirm"
+              autoComplete="off"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteDialogClose}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteLoanConfirm} 
+              className={`${
+                deleteConfirmText.toLowerCase() === 'delete'
+                  ? 'bg-red-500 hover:bg-red-600' 
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+              disabled={deleteConfirmText.toLowerCase() !== 'delete'}
+            >
+              Delete Loan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }; 

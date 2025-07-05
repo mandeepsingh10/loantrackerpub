@@ -940,7 +940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/loans/:id', async (req, res) => {
+  app.delete('/api/loans/:id', requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteLoan(id);

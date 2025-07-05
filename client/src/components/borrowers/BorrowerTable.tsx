@@ -41,11 +41,15 @@ interface BorrowerWithLoans extends Borrower {
     flatMonthlyAmount: number | null;
     status: string;
     nextPayment?: string;
+    guarantorName?: string;
+    guarantorPhone?: string;
+    guarantorAddress?: string;
   }>;
 }
 
 const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDeleteLoan, setConfirmDeleteLoan] = useState<{ borrowerId: number; loanId: number } | null>(null);
   const [selectedBorrower, setSelectedBorrower] = useState<number | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [expandedBorrowers, setExpandedBorrowers] = useState<Set<number>>(new Set());
@@ -166,6 +170,27 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     },
   });
 
+  const deleteLoanMutation = useMutation({
+    mutationFn: async (loanId: number) => {
+      await apiRequest("DELETE", `/api/loans/${loanId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/borrowers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/borrowers", "with-loans"] });
+      toast({
+        title: "Loan Deleted",
+        description: "The loan has been deleted successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to delete loan: ${error}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDeleteConfirm = () => {
     if (confirmDelete && deleteConfirmText.toLowerCase() === 'delete') {
       deleteMutation.mutate(confirmDelete);
@@ -174,8 +199,17 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     }
   };
 
+  const handleDeleteLoanConfirm = () => {
+    if (confirmDeleteLoan && deleteConfirmText.toLowerCase() === 'delete') {
+      deleteLoanMutation.mutate(confirmDeleteLoan.loanId);
+      setConfirmDeleteLoan(null);
+      setDeleteConfirmText("");
+    }
+  };
+
   const handleDeleteDialogClose = () => {
     setConfirmDelete(null);
+    setConfirmDeleteLoan(null);
     setDeleteConfirmText("");
   };
 
@@ -224,10 +258,10 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                   Borrower
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-white uppercase tracking-wider">
-                  Guarantor
+                  Contact
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-white uppercase tracking-wider">
-                  Contact
+                  Guarantor
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-white uppercase tracking-wider">
                   Loan Amount
@@ -278,15 +312,15 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">
-                        {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
-                      </div>
-                    </td>
                     <td className="px-6 py-4">
                       <div className="text-sm">
                         <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
                         <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">
+                        {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
                       </div>
                     </td>
                         <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
@@ -343,15 +377,22 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-white">
-                              {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
-                            </div>
-                          </td>
                           <td className="px-6 py-4">
                             <div className="text-sm">
                               <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
                               <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-white">
+                              <div className="font-medium">
+                                {loan.guarantorName || borrower.guarantorName || "-"}
+                              </div>
+                              <div className="text-xs text-gray-300">
+                                {loan.guarantorPhone || borrower.guarantorPhone || ""}
+                                {loan.guarantorPhone || borrower.guarantorPhone ? <br /> : null}
+                                {loan.guarantorAddress || borrower.guarantorAddress || ""}
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -450,16 +491,14 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-white">
-                                {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
-                              </div>
-                            </td>
                             <td className="px-6 py-4">
                               <div className="text-sm">
                                 <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
                                 <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
                               </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-400"></div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="font-medium text-white">
@@ -513,19 +552,103 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                           </tr>
                         )}
                         
-                        {/* Loan #1 row - only show when expanded */}
+                        {/* Loan details row - only show when expanded */}
                         {loanIndex === 0 && isExpanded && (
                           <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="ml-10 font-medium text-white">
-                                Loan 1
+                                Loan {loanIndex + 1}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-400"></div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-white">
+                                <div className="font-medium">
+                                  {loan.guarantorName || borrower.guarantorName || "-"}
+                                </div>
+                                <div className="text-xs text-gray-300">
+                                  {loan.guarantorPhone || borrower.guarantorPhone || ""}
+                                  {loan.guarantorPhone || borrower.guarantorPhone ? <br /> : null}
+                                  {loan.guarantorAddress || borrower.guarantorAddress || ""}
+                                </div>
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-400">-</div>
+                              <div className="font-medium text-white">
+                                {formatCurrency(loan.amount)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {getLoanStrategyDisplay(loan.loanStrategy)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver'
+                                  ? 'NA'
+                                  : loan.loanStrategy === 'emi' 
+                                    ? formatCurrency(loan.customEmiAmount || 0)
+                                    : formatCurrency(loan.flatMonthlyAmount || 0)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-white">
+                              {loan.nextPayment || "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <StatusBadge status={loan.status} />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => setSelectedBorrower(borrower.id)}
+                                >
+                                  {isAdmin ? (
+                                    <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                                  ) : (
+                                    <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                                  )}
+                                </Button>
+                                {isAdmin && hasMultipleLoans && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    onClick={() => setConfirmDeleteLoan({ borrowerId: borrower.id, loanId: loan.id })}
+                                  >
+                                    <Trash2 size={16} className="text-red-500 hover:text-red-400" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        
+                        {/* Additional loan details rows - only show when expanded */}
+                        {isExpanded && loanIndex > 0 && (
+                          <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="ml-10 font-medium text-white">
+                                Loan {loanIndex + 1}
+                              </div>
                             </td>
                             <td className="px-6 py-4">
-                              <div className="text-sm text-gray-400">-</div>
+                              <div className="text-sm text-gray-400"></div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-white">
+                                <div className="font-medium">
+                                  {loan.guarantorName || borrower.guarantorName || "-"}
+                                </div>
+                                <div className="text-xs text-gray-300">
+                                  {loan.guarantorPhone || borrower.guarantorPhone || ""}
+                                  {loan.guarantorPhone || borrower.guarantorPhone ? <br /> : null}
+                                  {loan.guarantorAddress || borrower.guarantorAddress || ""}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="font-medium text-white">
@@ -569,68 +692,11 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                                   <Button 
                                     variant="ghost" 
                                     size="icon"
-                                    onClick={() => setConfirmDelete(borrower.id)}
+                                    onClick={() => setConfirmDeleteLoan({ borrowerId: borrower.id, loanId: loan.id })}
                                   >
                                     <Trash2 size={16} className="text-red-500 hover:text-red-400" />
                                   </Button>
                                 )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        
-                        {/* Additional loan details rows - only show when expanded */}
-                        {isExpanded && loanIndex > 0 && (
-                          <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="ml-10 font-medium text-white">
-                                Loan {loanIndex + 1}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-400">-</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-400">-</div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="font-medium text-white">
-                                {formatCurrency(loan.amount)}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="font-medium text-white">
-                                {getLoanStrategyDisplay(loan.loanStrategy)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="font-medium text-white">
-                                {loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver'
-                                  ? 'NA'
-                                  : loan.loanStrategy === 'emi' 
-                                    ? formatCurrency(loan.customEmiAmount || 0)
-                                    : formatCurrency(loan.flatMonthlyAmount || 0)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-white">
-                              {loan.nextPayment || "-"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <StatusBadge status={loan.status} />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center space-x-3">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  onClick={() => setSelectedBorrower(borrower.id)}
-                                >
-                                  {isAdmin ? (
-                                    <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
-                                  ) : (
-                                    <Eye size={16} className="text-blue-400 hover:text-blue-300" />
-                                  )}
-                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -698,6 +764,46 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
               disabled={deleteConfirmText.toLowerCase() !== 'delete'}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Loan Confirmation Dialog */}
+      <AlertDialog open={confirmDeleteLoan !== null} onOpenChange={handleDeleteDialogClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Loan</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this specific loan. The borrower will remain, but this loan and all its associated payment data will be removed.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Type "delete" to confirm:
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              placeholder="Type 'delete' to confirm"
+              autoComplete="off"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteDialogClose}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteLoanConfirm} 
+              className={`${
+                deleteConfirmText.toLowerCase() === 'delete'
+                  ? 'bg-red-500 hover:bg-red-600' 
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+              disabled={deleteConfirmText.toLowerCase() !== 'delete'}
+            >
+              Delete Loan
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
