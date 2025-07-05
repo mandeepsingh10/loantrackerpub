@@ -78,7 +78,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: 'Administrator',
           email: 'admin@loansight.com'
         });
-        console.log('Default admin user created: admin / Admin@2024!');
+        console.log('Default admin user created: admin');
         
         // Create your user account
         await AuthService.createUser({
@@ -89,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: 'Singh',
           email: 'mandeep@example.com'
         });
-        console.log('User account created: mandeepsingh10 / Md@Singh2024!');
+        console.log('User account created: mandeepsingh10');
         
         // Create Lakshay's user account
         await AuthService.createUser({
@@ -100,7 +100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: 'Batra',
           email: 'lakshay@example.com'
         });
-        console.log('User account created: lakshayb / Lk$Batra2024#');
+        console.log('User account created: lakshayb');
         
         // Create viewer user for read-only access
         await AuthService.createUser({
@@ -111,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: 'Only',
           email: 'viewer@example.com'
         });
-        console.log('Viewer account created: viewer / View@2024!');
+        console.log('Viewer account created: viewer');
         
         console.log('Default users initialization completed successfully!');
       }
