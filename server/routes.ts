@@ -1220,19 +1220,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payments = await storage.getPayments();
       const users = await storage.getUsers();
       
-      // Get photos from uploads directory
+      // Get photos from uploads directory and embed them in backup
       const photosDir = path.join(__dirname, '../uploads/photos');
-      const photos: { [filename: string]: string } = {};
+      const photos: { [filename: string]: { data: string; mimetype: string; size: number } } = {};
       
       if (fs.existsSync(photosDir)) {
         const photoFiles = fs.readdirSync(photosDir);
+        
+        // Also check which photos are referenced in borrower data
+        const referencedPhotos = new Set<string>();
+        borrowers.forEach(borrower => {
+          if (borrower.photoUrl) {
+            const filename = borrower.photoUrl.split('/').pop();
+            if (filename) {
+              referencedPhotos.add(filename);
+            }
+          }
+        });
+        
+        console.log(`Found ${photoFiles.length} photo files, ${referencedPhotos.size} referenced in borrower data`);
+        
         for (const filename of photoFiles) {
           const filePath = path.join(photosDir, filename);
           const fileBuffer = fs.readFileSync(filePath);
           const base64Data = fileBuffer.toString('base64');
-          photos[filename] = base64Data;
+          
+          // Determine MIME type based on file extension
+          const ext = path.extname(filename).toLowerCase();
+          let mimetype = 'image/jpeg'; // default
+          if (ext === '.png') mimetype = 'image/png';
+          else if (ext === '.gif') mimetype = 'image/gif';
+          else if (ext === '.webp') mimetype = 'image/webp';
+          
+          photos[filename] = {
+            data: base64Data,
+            mimetype: mimetype,
+            size: fileBuffer.length
+          };
         }
-        console.log(`Included ${Object.keys(photos).length} photos in backup`);
+        
+        // Check for orphaned photos (files not referenced by any borrower)
+        const orphanedPhotos = photoFiles.filter(filename => !referencedPhotos.has(filename));
+        if (orphanedPhotos.length > 0) {
+          console.log(`Warning: Found ${orphanedPhotos.length} orphaned photos: ${orphanedPhotos.join(', ')}`);
+        }
+        
+        console.log(`Included ${Object.keys(photos).length} photos in backup (${Object.values(photos).reduce((sum, photo) => sum + photo.size, 0)} bytes total)`);
       }
       
       const backupData = {
@@ -1244,6 +1277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPayments: payments.length,
           totalUsers: users.length,
           totalPhotos: Object.keys(photos).length,
+          totalPhotoSize: Object.values(photos).reduce((sum, photo) => sum + (photo.size || 0), 0),
           features: {
             photoSupport: true,
             guarantorPerLoan: true,
@@ -1296,18 +1330,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Clear existing photos
-        const existingPhotos = fs.readdirSync(photosDir);
-        for (const photo of existingPhotos) {
-          fs.unlinkSync(path.join(photosDir, photo));
+        if (fs.existsSync(photosDir)) {
+          const existingPhotos = fs.readdirSync(photosDir);
+          for (const photo of existingPhotos) {
+            fs.unlinkSync(path.join(photosDir, photo));
+          }
         }
         
         // Restore photos from backup
-        for (const [filename, base64Data] of Object.entries(photos)) {
-          const fileBuffer = Buffer.from(base64Data as string, 'base64');
+        let totalSize = 0;
+        for (const [filename, photoData] of Object.entries(photos)) {
+          // Handle both old format (string) and new format (object)
+          let base64Data: string;
+          if (typeof photoData === 'string') {
+            // Old format - just base64 string
+            base64Data = photoData;
+          } else {
+            // New format - object with data, mimetype, size
+            base64Data = photoData.data;
+            totalSize += photoData.size || 0;
+          }
+          
+          const fileBuffer = Buffer.from(base64Data, 'base64');
           const filePath = path.join(photosDir, filename);
           fs.writeFileSync(filePath, fileBuffer);
+          
+          // Verify the photo URL in database matches the restored file
+          console.log(`Restored photo: ${filename} -> ${filePath}`);
         }
-        console.log(`Restored ${Object.keys(photos).length} photos`);
+        console.log(`Restored ${Object.keys(photos).length} photos (${totalSize} bytes total)`);
+        
+        // Verify that all borrower photo URLs have corresponding files
+        const restoredPhotoFiles = fs.readdirSync(photosDir);
+        console.log(`Available photo files after restore: ${restoredPhotoFiles.join(', ')}`);
+        
+        // Validate that all photo URLs in borrower data have corresponding files
+        const missingPhotos: string[] = [];
+        data.borrowers.forEach(borrower => {
+          if (borrower.photoUrl) {
+            const filename = borrower.photoUrl.split('/').pop();
+            if (filename && !restoredPhotoFiles.includes(filename)) {
+              missingPhotos.push(filename);
+            }
+          }
+        });
+        
+        if (missingPhotos.length > 0) {
+          console.log(`Warning: Missing photo files for URLs: ${missingPhotos.join(', ')}`);
+        } else {
+          console.log('All photo URLs have corresponding files ✓');
+        }
       }
       
       console.log('Restoring users...');
@@ -1332,6 +1404,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const borrowerIdMapping = new Map();
       
       for (const borrower of data.borrowers) {
+        // Ensure photoUrl is properly formatted for the new instance
+        let photoUrl = borrower.photoUrl;
+        if (photoUrl && !photoUrl.startsWith('/uploads/photos/')) {
+          // If photoUrl doesn't have the correct path, extract filename and create proper path
+          const filename = photoUrl.split('/').pop() || photoUrl.split('\\').pop();
+          if (filename) {
+            photoUrl = `/uploads/photos/${filename}`;
+          }
+        }
+        
         const newBorrower = await storage.createBorrower({
           name: borrower.name,
           phone: borrower.phone,
@@ -1342,7 +1424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           guarantorPhone: borrower.guarantorPhone,
           guarantorAddress: borrower.guarantorAddress,
           notes: borrower.notes,
-          photoUrl: borrower.photoUrl
+          photoUrl: photoUrl
         });
         borrowerIdMapping.set(borrower.id, newBorrower.id);
       }
@@ -1406,7 +1488,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           loans: data.loans.length,
           payments: data.payments.length,
           users: data.users ? data.users.length : 0,
-          photos: photos ? Object.keys(photos).length : 0
+          photos: photos ? Object.keys(photos).length : 0,
+          photoSize: photos ? Object.values(photos).reduce((sum, photo) => sum + (typeof photo === 'string' ? 0 : (photo.size || 0)), 0) : 0
         }
       });
     } catch (error) {

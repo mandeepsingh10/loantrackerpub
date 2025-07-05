@@ -48,7 +48,8 @@ const Settings = () => {
       return await response.json();
     },
     onSuccess: (data) => {
-      const photoText = data.metadata.totalPhotos > 0 ? `, ${data.metadata.totalPhotos} photos` : '';
+      const photoText = data.metadata.totalPhotos > 0 ? 
+        `, ${data.metadata.totalPhotos} photos (${(data.metadata.totalPhotoSize / 1024 / 1024).toFixed(1)} MB)` : '';
       const userText = data.metadata.totalUsers > 0 ? `, ${data.metadata.totalUsers} users` : '';
       
       toast({
@@ -114,7 +115,8 @@ const Settings = () => {
       setTimeout(() => {
         setIsRestoring(false);
         setRestoreProgress(0);
-        const photoText = data.stats.photos > 0 ? `, ${data.stats.photos} photos` : '';
+        const photoText = data.stats.photos > 0 ? 
+          `, ${data.stats.photos} photos (${(data.stats.photoSize / 1024 / 1024).toFixed(1)} MB)` : '';
         const userText = data.stats.users > 0 ? `, ${data.stats.users} users` : '';
         
         toast({
@@ -243,11 +245,34 @@ const Settings = () => {
             Backup your database and all loan management data to ensure you never lose important information.
           </p>
         </CardHeader>
-        <CardContent className="space-y-6">
+                <CardContent className="space-y-6">
+          <div className="p-4 border border-green-600 rounded-lg bg-green-900/20">
+            <div className="flex items-center space-x-2 mb-2">
+              <CheckCircle className="h-4 w-4 text-green-400" />
+              <h4 className="font-medium text-green-300">What's Included in Backups</h4>
+            </div>
+            <p className="text-xs text-green-200 mb-2">
+              💾 Backup files are self-contained and include all photos embedded as base64 data. Photo URLs are preserved and will work correctly after restore.
+            </p>
+            <ul className="text-sm text-green-200 space-y-1">
+              <li>• All borrower information and contact details</li>
+              <li>• Complete loan records and payment schedules</li>
+              <li>• Payment history and collection status</li>
+              <li>• Interest calculations and EMI details</li>
+              <li>• Database structure and relationships</li>
+              <li>• Borrower photos and documents (embedded in backup)</li>
+              <li>• User accounts and permissions</li>
+              <li>• Loan-specific guarantor information</li>
+              <li>• Multiple loan strategies (EMI, FLAT, Custom, Gold & Silver)</li>
+              <li>• Payment notes and collection methods</li>
+            </ul>
+          </div>
+
           <div className="p-4 border border-white/20 rounded-lg bg-black">
             <h4 className="font-medium text-white mb-2">Manual Backup</h4>
             <p className="text-sm text-white/70 mb-4">
-              Create an immediate backup of all your data including the complete database structure and content.
+              Create a complete, self-contained backup of all your data including photos, database structure, and content. 
+              This backup can be restored on any new instance without requiring existing files.
             </p>
             <Button 
               onClick={handleCreateBackup}
@@ -259,25 +284,6 @@ const Settings = () => {
                 {createBackupMutation.isPending ? "Creating Backup..." : "Create Backup Now"}
               </span>
             </Button>
-          </div>
-
-          <div className="p-4 border border-green-600 rounded-lg bg-green-900/20">
-            <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-green-400" />
-              <h4 className="font-medium text-green-300">What's Included in Backups</h4>
-            </div>
-            <ul className="text-sm text-green-200 space-y-1">
-              <li>• All borrower information and contact details</li>
-              <li>• Complete loan records and payment schedules</li>
-              <li>• Payment history and collection status</li>
-              <li>• Interest calculations and EMI details</li>
-              <li>• Database structure and relationships</li>
-              <li>• Borrower photos and documents</li>
-              <li>• User accounts and permissions</li>
-              <li>• Loan-specific guarantor information</li>
-              <li>• Multiple loan strategies (EMI, FLAT, Custom, Gold & Silver)</li>
-              <li>• Payment notes and collection methods</li>
-            </ul>
           </div>
         </CardContent>
       </Card>

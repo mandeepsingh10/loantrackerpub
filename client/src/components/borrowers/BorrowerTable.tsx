@@ -265,61 +265,61 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
                   if (loans.length === 0) {
                     // Borrower with no loans
                     return (
-                      <tr key={borrower.id} className="hover:bg-[#111111]">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
-                              isDefaulter(borrower.id) ? 'bg-red-600' : 'bg-blue-600'
-                            }`}>
-                              <span>{borrower.name ? borrower.name.charAt(0).toUpperCase() : '?'}</span>
-                            </div>
-                            <div className="font-medium text-white">
-                              {highlightText(borrower.name, searchQuery)}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-white">
-                            {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm">
-                            <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
-                            <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
-                          </div>
-                        </td>
+                  <tr key={borrower.id} className="hover:bg-[#111111]">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
+                          isDefaulter(borrower.id) ? 'bg-red-600' : 'bg-blue-600'
+                        }`}>
+                          <span>{borrower.name ? borrower.name.charAt(0).toUpperCase() : '?'}</span>
+                        </div>
+                        <div className="font-medium text-white">
+                          {highlightText(borrower.name, searchQuery)}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">
+                        {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm">
+                        <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
+                        <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
+                      </div>
+                    </td>
                         <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
                           No loans
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <StatusBadge status={borrower.status} />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-3">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => setSelectedBorrower(borrower.id)}
-                            >
-                              {isAdmin ? (
-                                <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
-                              ) : (
-                                <Eye size={16} className="text-blue-400 hover:text-blue-300" />
-                              )}
-                            </Button>
-                            {isAdmin && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={() => setConfirmDelete(borrower.id)}
-                              >
-                                <Trash2 size={16} className="text-red-500 hover:text-red-400" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <StatusBadge status={borrower.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => setSelectedBorrower(borrower.id)}
+                        >
+                          {isAdmin ? (
+                            <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                          ) : (
+                            <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                          )}
+                        </Button>
+                        {isAdmin && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => setConfirmDelete(borrower.id)}
+                          >
+                            <Trash2 size={16} className="text-red-500 hover:text-red-400" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                     );
                   }
 
