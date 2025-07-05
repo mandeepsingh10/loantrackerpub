@@ -573,6 +573,7 @@ const NewBorrowerModal = ({ isOpen, onClose }: NewBorrowerModalProps) => {
             onSubmit={onLoanSubmit}
             onCancel={handleCancel}
             isSubmitting={loanMutation.isPending}
+            isNewBorrower={true}
           />
         )}
       </DialogContent>

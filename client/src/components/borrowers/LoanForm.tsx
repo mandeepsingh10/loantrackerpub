@@ -34,10 +34,10 @@ const loanFormSchema = z.object({
   }),
   startDate: z.string().min(1, { message: "Start date is required" }),
   
-  // Guarantor fields
-  guarantorName: z.string().min(1, { message: "Guarantor name is required" }),
-  guarantorPhone: z.string().min(1, { message: "Guarantor phone is required" }),
-  guarantorAddress: z.string().min(1, { message: "Guarantor address is required" }),
+  // Guarantor fields - optional when creating new borrower
+  guarantorName: z.string().optional(),
+  guarantorPhone: z.string().optional(),
+  guarantorAddress: z.string().optional(),
   
   // Loan notes
   notes: z.string().optional(),
@@ -111,9 +111,10 @@ interface LoanFormProps {
   onSubmit: (data: any) => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  isNewBorrower?: boolean; // New prop to indicate if this is for a new borrower
 }
 
-const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProps) => {
+const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting, isNewBorrower }: LoanFormProps) => {
   const [loanStrategy, setLoanStrategy] = useState<"emi" | "flat" | "custom" | "gold_silver">("emi");
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorValues, setCalculatorValues] = useState({
@@ -205,9 +206,9 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
       amount: "10000",
       loanStrategy: "emi",
       startDate: new Date().toISOString().split("T")[0],
-      guarantorName: "",
-      guarantorPhone: "",
-      guarantorAddress: "",
+      guarantorName: isNewBorrower ? undefined : "",
+      guarantorPhone: isNewBorrower ? undefined : "",
+      guarantorAddress: isNewBorrower ? undefined : "",
       notes: "",
       tenure: "12",
       customEmiAmount: "1000",
@@ -350,65 +351,67 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
             </div>
           </div>
 
-          <div>
-            <h4 className="font-medium text-white mb-4">Guarantor Information</h4>
-            <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="guarantorName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Guarantor Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="Enter guarantor name"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {!isNewBorrower && (
+            <div>
+              <h4 className="font-medium text-white mb-4">Guarantor Information</h4>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="guarantorName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Guarantor Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="Enter guarantor name"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="guarantorPhone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Guarantor Phone</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="Enter guarantor phone"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="guarantorPhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Guarantor Phone</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="Enter guarantor phone"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="guarantorAddress"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Guarantor Address</FormLabel>
-                    <FormControl>
-                      <textarea
-                        rows={3}
-                        placeholder="Enter guarantor address"
-                        {...field}
-                        className="w-full px-3 py-2 text-white bg-black border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-gray-400"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="guarantorAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Guarantor Address</FormLabel>
+                      <FormControl>
+                        <textarea
+                          rows={3}
+                          placeholder="Enter guarantor address"
+                          {...field}
+                          className="w-full px-3 py-2 text-white bg-black border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-gray-400"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <h4 className="font-medium text-white mb-4">Payment Information</h4>

@@ -75,6 +75,7 @@ export const AddLoanModal = ({ borrowerId, isOpen, onClose }: AddLoanModalProps)
           onSubmit={onLoanSubmit}
           onCancel={handleCancel}
           isSubmitting={loanMutation.isPending}
+          isNewBorrower={false}
         />
       </DialogContent>
     </Dialog>
