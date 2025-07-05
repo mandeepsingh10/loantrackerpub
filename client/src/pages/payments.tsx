@@ -11,6 +11,8 @@ import { formatCurrency } from "@/lib/utils";
 import { formatDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { BorrowerDetails } from "@/components/borrowers/BorrowerDetails";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const Payments = () => {
   const [activeTab, setActiveTab] = useState<"upcoming" | "collected" | "missed">("upcoming");
@@ -19,6 +21,7 @@ const Payments = () => {
     return "2025-06";
   });
   const [selectedBorrower, setSelectedBorrower] = useState<number | null>(null);
+  const [showAllData, setShowAllData] = useState(false);
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ["/api/payments"],
@@ -88,9 +91,13 @@ const Payments = () => {
       return false;
     }
     
-    const paymentDate = new Date(payment.dueDate);
-    const paymentMonth = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
-    const matchesMonth = paymentMonth === selectedMonth;
+    // Only filter by month if showAllData is false
+    let matchesMonth = true;
+    if (!showAllData) {
+      const paymentDate = new Date(payment.dueDate);
+      const paymentMonth = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+      matchesMonth = paymentMonth === selectedMonth;
+    }
     
     return matchesSearch && matchesTab && matchesMonth;
   }) : [];
@@ -101,10 +108,13 @@ const Payments = () => {
       payment.borrowerPhone?.includes(searchQuery) ||
       payment.guarantorName?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Filter by selected month
-    const paymentDate = new Date(payment.dueDate);
-    const paymentMonth = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
-    const matchesMonth = paymentMonth === selectedMonth;
+    // Only filter by month if showAllData is false
+    let matchesMonth = true;
+    if (!showAllData) {
+      const paymentDate = new Date(payment.dueDate);
+      const paymentMonth = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+      matchesMonth = paymentMonth === selectedMonth;
+    }
     
     return matchesSearch && matchesMonth;
   });
@@ -234,20 +244,49 @@ const Payments = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             </div>
             
-            <div className="flex items-center space-x-3 flex-shrink-0">
-              <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Month:</span>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-44 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {generateMonthOptions().map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center space-x-4 flex-shrink-0">
+              {/* Data View Toggle */}
+              <div className="flex flex-col items-center space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className={`text-sm font-medium whitespace-nowrap transition-colors ${
+                    showAllData ? 'text-blue-400 font-semibold' : 'text-gray-500'
+                  }`}>
+                    All
+                  </span>
+                  <Switch
+                    id="data-toggle"
+                    checked={!showAllData}
+                    onCheckedChange={(checked) => setShowAllData(!checked)}
+                    className="data-toggle"
+                  />
+                  <span className={`text-sm font-medium whitespace-nowrap transition-colors ${
+                    !showAllData ? 'text-blue-400 font-semibold' : 'text-gray-500'
+                  }`}>
+                    Month
+                  </span>
+                </div>
+                {showAllData && (
+                  <div className="text-xs text-gray-400">
+                    Showing all payments
+                  </div>
+                )}
+              </div>
+              
+              {/* Month Selector - only show when not showing all data */}
+              {!showAllData && (
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-44 h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {generateMonthOptions().map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </div>
@@ -350,31 +389,31 @@ const Payments = () => {
                     <TableRow key={payment.id}>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <User className="h-4 w-4 text-gray-500" />
-                          <span className="font-medium">{payment.borrower || "Unknown"}</span>
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium text-white">{payment.borrower || "Unknown"}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Phone className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm">{payment.phone || "No contact"}</span>
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm text-gray-300">{payment.phone || "No contact"}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="border-gray-600 text-white">
                           {payment.loanType || "EMI"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Calendar className="h-4 w-4 text-gray-500" />
-                          <span>
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span className="text-white">
                             {format(new Date(payment.dueDate), "MMM d, yyyy")}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium">
+                        <span className="font-medium text-white">
                           {formatCurrency(payment.amount)}
                         </span>
                       </TableCell>
@@ -386,18 +425,18 @@ const Payments = () => {
                 </TableBody>
               </Table>
             ) : (
-              <div className="text-center py-12 text-gray-500">
+              <div className="text-center py-12 text-gray-400">
                 <div className="mb-2">
                   {activeTab === "upcoming" ? (
-                    <Clock className="h-12 w-12 mx-auto text-gray-300" />
+                    <Clock className="h-12 w-12 mx-auto text-gray-400" />
                   ) : (
-                    <CheckCircle className="h-12 w-12 mx-auto text-gray-300" />
+                    <CheckCircle className="h-12 w-12 mx-auto text-gray-400" />
                   )}
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">
+                <h3 className="text-lg font-medium text-white mb-1">
                   No {activeTab} payments
                 </h3>
-                <p className="text-gray-500">
+                <p className="text-gray-400">
                   {searchQuery 
                     ? "No payments found matching your search." 
                     : `No ${activeTab} payments at this time.`

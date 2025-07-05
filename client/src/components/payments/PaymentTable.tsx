@@ -78,7 +78,7 @@ const PaymentTable = ({ payments }: PaymentTableProps) => {
           <tbody className="divide-y divide-gray-700">
           {payments.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-6 py-4 text-center text-gray-300">
+              <td colSpan={7} className="px-6 py-4 text-center text-gray-400">
                 No payments found for the selected period.
               </td>
             </tr>

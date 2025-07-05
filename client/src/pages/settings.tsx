@@ -48,9 +48,12 @@ const Settings = () => {
       return await response.json();
     },
     onSuccess: (data) => {
+      const photoText = data.metadata.totalPhotos > 0 ? `, ${data.metadata.totalPhotos} photos` : '';
+      const userText = data.metadata.totalUsers > 0 ? `, ${data.metadata.totalUsers} users` : '';
+      
       toast({
         title: "Backup Created Successfully",
-        description: `Backup contains ${data.metadata.totalBorrowers} borrowers, ${data.metadata.totalLoans} loans, and ${data.metadata.totalPayments} payments.`,
+        description: `Backup contains ${data.metadata.totalBorrowers} borrowers, ${data.metadata.totalLoans} loans, ${data.metadata.totalPayments} payments${photoText}${userText}.`,
       });
       
       // Trigger download
@@ -111,9 +114,12 @@ const Settings = () => {
       setTimeout(() => {
         setIsRestoring(false);
         setRestoreProgress(0);
+        const photoText = data.stats.photos > 0 ? `, ${data.stats.photos} photos` : '';
+        const userText = data.stats.users > 0 ? `, ${data.stats.users} users` : '';
+        
         toast({
           title: "Data Restored Successfully",
-          description: `Restored ${data.stats.borrowers} borrowers, ${data.stats.loans} loans, and ${data.stats.payments} payments.`,
+          description: `Restored ${data.stats.borrowers} borrowers, ${data.stats.loans} loans, ${data.stats.payments} payments${photoText}${userText}.`,
         });
         // Refresh all data
         queryClient.invalidateQueries();
@@ -266,6 +272,11 @@ const Settings = () => {
               <li>• Payment history and collection status</li>
               <li>• Interest calculations and EMI details</li>
               <li>• Database structure and relationships</li>
+              <li>• Borrower photos and documents</li>
+              <li>• User accounts and permissions</li>
+              <li>• Loan-specific guarantor information</li>
+              <li>• Multiple loan strategies (EMI, FLAT, Custom, Gold & Silver)</li>
+              <li>• Payment notes and collection methods</li>
             </ul>
           </div>
         </CardContent>

@@ -9,16 +9,64 @@ import { BorrowerDetails } from "@/components/borrowers/BorrowerDetails";
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+interface LoanWithBorrower {
+  id: number;
+  borrowerId: number;
+  borrowerName: string;
+  amount: number;
+  loanStrategy: string;
+  status: string;
+  nextPayment: string;
+  createdAt: string;
+}
+
+interface BorrowerWithLoans {
+  borrowerId: number;
+  borrowerName: string;
+  loans: LoanWithBorrower[];
+}
+
 const RecentLoans = () => {
   const [selectedBorrower, setSelectedBorrower] = useState<number | null>(null);
   const [isAmountVisible, setIsAmountVisible] = useState(false);
+  const [expandedBorrowers, setExpandedBorrowers] = useState<Set<number>>(new Set());
 
   const toggleAmountVisibility = () => {
     setIsAmountVisible(!isAmountVisible);
   };
+
+  const toggleBorrowerExpansion = (borrowerId: number) => {
+    const newExpanded = new Set(expandedBorrowers);
+    if (newExpanded.has(borrowerId)) {
+      newExpanded.delete(borrowerId);
+    } else {
+      newExpanded.add(borrowerId);
+    }
+    setExpandedBorrowers(newExpanded);
+  };
   
   const { data: recentLoans, isLoading } = useQuery({
     queryKey: ["/api/dashboard/recent-loans"],
+  });
+
+  // Group loans by borrower
+  const groupedLoans = (recentLoans || []).reduce((acc: BorrowerWithLoans[], loan: LoanWithBorrower) => {
+    const existingBorrower = acc.find(b => b.borrowerId === loan.borrowerId);
+    if (existingBorrower) {
+      existingBorrower.loans.push(loan);
+    } else {
+      acc.push({
+        borrowerId: loan.borrowerId,
+        borrowerName: loan.borrowerName,
+        loans: [loan]
+      });
+    }
+    return acc;
+  }, []);
+
+  // Sort loans within each borrower by creation date (most recent first)
+  groupedLoans.forEach(borrower => {
+    borrower.loans.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   });
 
   if (isLoading) {
@@ -41,7 +89,7 @@ const RecentLoans = () => {
   }
 
   // Check if we have valid loans data
-  const hasLoans = Array.isArray(recentLoans) && recentLoans.length > 0;
+  const hasLoans = groupedLoans.length > 0;
 
   return (
     <>
@@ -90,64 +138,257 @@ const RecentLoans = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                  {recentLoans.map((loan) => (
-                    <tr key={loan.id} className="hover:bg-[#111111]">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
-                            (loan.status || '').toLowerCase() === 'defaulter' ? 'bg-red-600' : 'bg-blue-600'
-                          }`}>
-                            <span>{loan.borrowerName ? loan.borrowerName.charAt(0) : '?'}</span>
-                          </div>
-                          <div className="text-white font-medium">{loan.borrowerName || 'Unknown'}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-white">
-                        {isAmountVisible ? 
-                          `₹${loan.amount ? loan.amount.toLocaleString() : '0'}` : 
-                          '••••••'
-                        }
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-medium text-white capitalize">
-                          {loan.loanStrategy ? 
-                            loan.loanStrategy.toUpperCase() : 
-                            'EMI'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <StatusBadge status={loan.status || 'unknown'} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-white">
-                        {(() => {
-                          // Check if nextPayment is a valid date string
-                          if (!loan.nextPayment || 
-                              typeof loan.nextPayment !== 'string' || 
-                              loan.nextPayment === 'Invalid Date' ||
-                              loan.nextPayment === 'No payments scheduled') {
-                            return loan.nextPayment === 'No payments scheduled' ? 
-                              'No payments scheduled' : 'N/A';
-                          }
+                  {groupedLoans.map((borrower) => {
+                    const loans = borrower.loans;
+                    const hasMultipleLoans = loans.length > 1;
+                    const isExpanded = expandedBorrowers.has(borrower.borrowerId);
+                    
+                    return loans.map((loan, loanIndex) => {
+                      // For single loan borrowers, show normally
+                      if (!hasMultipleLoans) {
+                        return (
+                          <tr key={loan.id} className="hover:bg-[#111111]">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
+                                  (loan.status || '').toLowerCase() === 'defaulter' ? 'bg-red-600' : 'bg-blue-600'
+                                }`}>
+                                  <span>{loan.borrowerName ? loan.borrowerName.charAt(0) : '?'}</span>
+                                </div>
+                                <div className="text-white font-medium">{loan.borrowerName || 'Unknown'}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-white">
+                              {isAmountVisible ? 
+                                `₹${loan.amount ? loan.amount.toLocaleString() : '0'}` : 
+                                '••••••'
+                              }
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white capitalize">
+                                {loan.loanStrategy ? 
+                                  loan.loanStrategy.toUpperCase() : 
+                                  'EMI'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <StatusBadge status={loan.status || 'unknown'} />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-white">
+                              {(() => {
+                                if (!loan.nextPayment || 
+                                    typeof loan.nextPayment !== 'string' || 
+                                    loan.nextPayment === 'Invalid Date' ||
+                                    loan.nextPayment === 'No payments scheduled') {
+                                  return loan.nextPayment === 'No payments scheduled' ? 
+                                    'No payments scheduled' : 'N/A';
+                                }
+                                
+                                try {
+                                  const date = new Date(loan.nextPayment);
+                                  return isNaN(date.getTime()) ? 'N/A' : format(date, 'dd MMM yyyy');
+                                } catch (e) {
+                                  return 'N/A';
+                                }
+                              })()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Button 
+                                variant="link" 
+                                className="text-blue-400 hover:text-blue-300 text-sm font-medium h-auto p-0"
+                                onClick={() => setSelectedBorrower(loan.borrowerId)}
+                              >
+                                View Details
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      }
+                      
+                      // For multiple loan borrowers
+                      // Show only the first loan by default, or all if expanded
+                      const shouldShow = loanIndex === 0 || isExpanded;
+                      
+                      if (!shouldShow) return null;
+                      
+                      // For collapsed view with multiple loans, show empty in loan columns
+                      const isCollapsedMultipleLoans = loanIndex === 0 && hasMultipleLoans && !isExpanded;
+                      
+                      return (
+                        <>
+                          {/* Borrower info row - only for first loan */}
+                          {loanIndex === 0 && (
+                            <tr key={`${borrower.borrowerId}-info`} className="hover:bg-[#111111]">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="relative mr-3">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => toggleBorrowerExpansion(borrower.borrowerId)}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center text-white p-0 hover:opacity-80 ${
+                                        (loan.status || '').toLowerCase() === 'defaulter' ? 'bg-red-600' : 'bg-blue-600'
+                                      }`}
+                                    >
+                                      <span>{loan.borrowerName ? loan.borrowerName.charAt(0) : '?'}</span>
+                                    </Button>
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                                      <span className="text-xs font-bold text-black">{loans.length}</span>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="font-medium text-white">
+                                      {loan.borrowerName || 'Unknown'}
+                                    </div>
+                                    {!isExpanded && (
+                                      <div className="text-xs text-gray-400">
+                                        {loans.length} loans
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-white">
+                                {!isExpanded ? "" : ""}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="font-medium text-white capitalize">
+                                  {!isExpanded ? "" : ""}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                {!isExpanded ? (
+                                  <span className="text-gray-400"></span>
+                                ) : (
+                                  <span className="text-gray-400"></span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-white">
+                                {!isExpanded ? "" : ""}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Button 
+                                  variant="link" 
+                                  className="text-blue-400 hover:text-blue-300 text-sm font-medium h-auto p-0"
+                                  onClick={() => setSelectedBorrower(loan.borrowerId)}
+                                >
+                                  View Details
+                                </Button>
+                              </td>
+                            </tr>
+                          )}
                           
-                          try {
-                            const date = new Date(loan.nextPayment);
-                            return isNaN(date.getTime()) ? 'N/A' : format(date, 'dd MMM yyyy');
-                          } catch (e) {
-                            return 'N/A';
-                          }
-                        })()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Button 
-                          variant="link" 
-                          className="text-blue-400 hover:text-blue-300 text-sm font-medium h-auto p-0"
-                          onClick={() => setSelectedBorrower(loan.borrowerId)}
-                        >
-                          View Details
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                          {/* Loan 1 row - only show when expanded */}
+                          {loanIndex === 0 && isExpanded && (
+                            <tr key={`${borrower.borrowerId}-${loan.id}`} className="hover:bg-[#111111]">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="ml-10 font-medium text-white">
+                                  Loan 1
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-white">
+                                {isAmountVisible ? 
+                                  `₹${loan.amount ? loan.amount.toLocaleString() : '0'}` : 
+                                  '••••••'
+                                }
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="font-medium text-white capitalize">
+                                  {loan.loanStrategy ? 
+                                    loan.loanStrategy.toUpperCase() : 
+                                    'EMI'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <StatusBadge status={loan.status || 'unknown'} />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-white">
+                                {(() => {
+                                  if (!loan.nextPayment || 
+                                      typeof loan.nextPayment !== 'string' || 
+                                      loan.nextPayment === 'Invalid Date' ||
+                                      loan.nextPayment === 'No payments scheduled') {
+                                    return loan.nextPayment === 'No payments scheduled' ? 
+                                      'No payments scheduled' : 'N/A';
+                                  }
+                                  
+                                  try {
+                                    const date = new Date(loan.nextPayment);
+                                    return isNaN(date.getTime()) ? 'N/A' : format(date, 'dd MMM yyyy');
+                                  } catch (e) {
+                                    return 'N/A';
+                                  }
+                                })()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Button 
+                                  variant="link" 
+                                  className="text-blue-400 hover:text-blue-300 text-sm font-medium h-auto p-0"
+                                  onClick={() => setSelectedBorrower(loan.borrowerId)}
+                                >
+                                  View Details
+                                </Button>
+                              </td>
+                            </tr>
+                          )}
+                          
+                          {/* Additional loan details rows - only show when expanded */}
+                          {isExpanded && loanIndex > 0 && (
+                            <tr key={`${borrower.borrowerId}-${loan.id}`} className="hover:bg-[#111111]">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="ml-10 font-medium text-white">
+                                  Loan {loanIndex + 1}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-white">
+                                {isAmountVisible ? 
+                                  `₹${loan.amount ? loan.amount.toLocaleString() : '0'}` : 
+                                  '••••••'
+                                }
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="font-medium text-white capitalize">
+                                  {loan.loanStrategy ? 
+                                    loan.loanStrategy.toUpperCase() : 
+                                    'EMI'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <StatusBadge status={loan.status || 'unknown'} />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-white">
+                                {(() => {
+                                  if (!loan.nextPayment || 
+                                      typeof loan.nextPayment !== 'string' || 
+                                      loan.nextPayment === 'Invalid Date' ||
+                                      loan.nextPayment === 'No payments scheduled') {
+                                    return loan.nextPayment === 'No payments scheduled' ? 
+                                      'No payments scheduled' : 'N/A';
+                                  }
+                                  
+                                  try {
+                                    const date = new Date(loan.nextPayment);
+                                    return isNaN(date.getTime()) ? 'N/A' : format(date, 'dd MMM yyyy');
+                                  } catch (e) {
+                                    return 'N/A';
+                                  }
+                                })()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Button 
+                                  variant="link" 
+                                  className="text-blue-400 hover:text-blue-300 text-sm font-medium h-auto p-0"
+                                  onClick={() => setSelectedBorrower(loan.borrowerId)}
+                                >
+                                  View Details
+                                </Button>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    });
+                  })}
                 </tbody>
               </table>
             ) : (

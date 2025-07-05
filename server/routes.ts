@@ -1218,20 +1218,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const borrowers = await storage.getBorrowers();
       const loans = await storage.getLoans();
       const payments = await storage.getPayments();
+      const users = await storage.getUsers();
+      
+      // Get photos from uploads directory
+      const photosDir = path.join(__dirname, '../uploads/photos');
+      const photos: { [filename: string]: string } = {};
+      
+      if (fs.existsSync(photosDir)) {
+        const photoFiles = fs.readdirSync(photosDir);
+        for (const filename of photoFiles) {
+          const filePath = path.join(photosDir, filename);
+          const fileBuffer = fs.readFileSync(filePath);
+          const base64Data = fileBuffer.toString('base64');
+          photos[filename] = base64Data;
+        }
+        console.log(`Included ${Object.keys(photos).length} photos in backup`);
+      }
       
       const backupData = {
         metadata: {
           exportDate: new Date().toISOString(),
-          version: '1.0',
+          version: '2.0',
           totalBorrowers: borrowers.length,
           totalLoans: loans.length,
-          totalPayments: payments.length
+          totalPayments: payments.length,
+          totalUsers: users.length,
+          totalPhotos: Object.keys(photos).length,
+          features: {
+            photoSupport: true,
+            guarantorPerLoan: true,
+            multipleLoanStrategies: true,
+            customPayments: true,
+            notesSupport: true,
+            userManagement: true
+          }
         },
         data: {
           borrowers,
           loans,
-          payments
-        }
+          payments,
+          users
+        },
+        photos
       };
       
       console.log('Backup created successfully');
@@ -1245,7 +1273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/backup/restore', requireAdmin, async (req, res) => {
     try {
       console.log('Starting data restore...');
-      const { data } = req.body;
+      const { data, photos } = req.body;
       
       if (!data || !data.borrowers || !data.loans || !data.payments) {
         return res.status(400).json({ message: 'Invalid backup file format' });
@@ -1254,8 +1282,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Clearing existing data...');
       
       // Clear existing data using TRUNCATE CASCADE for complete cleanup
-      await db.execute(sql.raw('TRUNCATE TABLE payments, loans, borrowers RESTART IDENTITY CASCADE'));
+      await db.execute(sql.raw('TRUNCATE TABLE payments, loans, borrowers, users RESTART IDENTITY CASCADE'));
       console.log('Tables cleared successfully');
+      
+      // Restore photos if they exist
+      if (photos && typeof photos === 'object') {
+        console.log('Restoring photos...');
+        const photosDir = path.join(__dirname, '../uploads/photos');
+        
+        // Create photos directory if it doesn't exist
+        if (!fs.existsSync(photosDir)) {
+          fs.mkdirSync(photosDir, { recursive: true });
+        }
+        
+        // Clear existing photos
+        const existingPhotos = fs.readdirSync(photosDir);
+        for (const photo of existingPhotos) {
+          fs.unlinkSync(path.join(photosDir, photo));
+        }
+        
+        // Restore photos from backup
+        for (const [filename, base64Data] of Object.entries(photos)) {
+          const fileBuffer = Buffer.from(base64Data as string, 'base64');
+          const filePath = path.join(photosDir, filename);
+          fs.writeFileSync(filePath, fileBuffer);
+        }
+        console.log(`Restored ${Object.keys(photos).length} photos`);
+      }
+      
+      console.log('Restoring users...');
+      // Restore users (if they exist in backup)
+      if (data.users && Array.isArray(data.users)) {
+        for (const user of data.users) {
+          await storage.createUser({
+            username: user.username,
+            email: user.email,
+            password: 'temporary_password_123', // Users will need to reset their password
+            role: user.role,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            isActive: user.isActive
+          });
+        }
+        console.log(`Restored ${data.users.length} users`);
+      }
       
       console.log('Restoring borrowers...');
       // Create a mapping from old IDs to new IDs
@@ -1271,7 +1341,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           guarantorName: borrower.guarantorName,
           guarantorPhone: borrower.guarantorPhone,
           guarantorAddress: borrower.guarantorAddress,
-          notes: borrower.notes
+          notes: borrower.notes,
+          photoUrl: borrower.photoUrl
         });
         borrowerIdMapping.set(borrower.id, newBorrower.id);
       }
@@ -1283,15 +1354,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const loan of data.loans) {
         const newBorrowerId = borrowerIdMapping.get(loan.borrowerId);
         if (newBorrowerId) {
-          // Create loan without triggering automatic payment generation
+          // Create loan with all new fields
           const [newLoan] = await db.insert(loans).values({
             borrowerId: newBorrowerId,
             amount: loan.amount,
             startDate: loan.startDate,
+            guarantorName: loan.guarantorName,
+            guarantorPhone: loan.guarantorPhone,
+            guarantorAddress: loan.guarantorAddress,
             loanStrategy: loan.loanStrategy,
             tenure: loan.tenure,
             customEmiAmount: loan.customEmiAmount,
-            flatMonthlyAmount: loan.flatMonthlyAmount
+            flatMonthlyAmount: loan.flatMonthlyAmount,
+            pmType: loan.pmType,
+            metalWeight: loan.metalWeight,
+            purity: loan.purity,
+            netWeight: loan.netWeight,
+            amountPaid: loan.amountPaid,
+            goldSilverNotes: loan.goldSilverNotes,
+            notes: loan.notes,
+            status: loan.status
           }).returning();
           loanIdMapping.set(loan.id, newLoan.id);
         }
@@ -1309,6 +1391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: payment.status,
             paidDate: payment.paidDate,
             paidAmount: payment.paidAmount,
+            dueAmount: payment.dueAmount,
             paymentMethod: payment.paymentMethod,
             notes: payment.notes
           });
@@ -1321,7 +1404,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stats: {
           borrowers: data.borrowers.length,
           loans: data.loans.length,
-          payments: data.payments.length
+          payments: data.payments.length,
+          users: data.users ? data.users.length : 0,
+          photos: photos ? Object.keys(photos).length : 0
         }
       });
     } catch (error) {
