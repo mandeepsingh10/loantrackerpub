@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Eye } from "lucide-react";
+import { Pencil, Trash2, Eye, ChevronDown, ChevronRight } from "lucide-react";
 import StatusBadge from "@/components/ui/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -25,10 +25,30 @@ interface BorrowerTableProps {
   searchQuery?: string;
 }
 
+interface BorrowerWithLoans extends Borrower {
+  loans?: Array<{
+    id: number;
+    amount: number;
+    formattedAmount: number;
+    interestRate: number | null;
+    interestType: string | null;
+    formattedInterest: string;
+    paymentType: string | null;
+    startDate: string | Date;
+    tenure: number | null;
+    loanStrategy: string;
+    customEmiAmount: number | null;
+    flatMonthlyAmount: number | null;
+    status: string;
+    nextPayment?: string;
+  }>;
+}
+
 const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [selectedBorrower, setSelectedBorrower] = useState<number | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [expandedBorrowers, setExpandedBorrowers] = useState<Set<number>>(new Set());
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
@@ -48,6 +68,42 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     });
   };
 
+  // Fetch loans for all borrowers
+  const { data: borrowersWithLoans = [] } = useQuery({
+    queryKey: ["/api/borrowers", "with-loans"],
+    queryFn: async () => {
+      const borrowersWithLoansData: BorrowerWithLoans[] = [];
+      
+      for (const borrower of borrowers) {
+        try {
+          const response = await apiRequest("GET", `/api/borrowers/${borrower.id}/loans`);
+          if (response.ok) {
+            const loans = await response.json();
+            borrowersWithLoansData.push({
+              ...borrower,
+              loans: loans || []
+            });
+          } else {
+            // If no loans found, add borrower with empty loans array
+            borrowersWithLoansData.push({
+              ...borrower,
+              loans: []
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to fetch loans for borrower ${borrower.id}:`, error);
+          borrowersWithLoansData.push({
+            ...borrower,
+            loans: []
+          });
+        }
+      }
+      
+      return borrowersWithLoansData;
+    },
+    enabled: borrowers.length > 0
+  });
+
   // Fetch payments to detect defaulters
   const { data: payments = [] } = useQuery({
     queryKey: ["/api/payments"],
@@ -60,11 +116,13 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    // Get all payments for this borrower's loan
-    const borrower = borrowers.find(b => b.id === borrowerId);
-    if (!borrower || !borrower.loan || !borrower.loan.id) return false;
+    // Get all payments for this borrower's loans
+    const borrower = borrowersWithLoans.find(b => b.id === borrowerId);
+    if (!borrower || !borrower.loans || borrower.loans.length === 0) return false;
     
-    const borrowerPayments = payments.filter((payment: any) => payment.loanId === borrower.loan!.id);
+    const borrowerPayments = payments.filter((payment: any) => 
+      borrower.loans!.some(loan => loan.id === payment.loanId)
+    );
     
     // Sort payments by due date
     const sortedPayments = borrowerPayments.sort((a, b) => 
@@ -93,6 +151,7 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/borrowers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/borrowers", "with-loans"] });
       toast({
         title: "Borrower Deleted",
         description: "The borrower has been deleted successfully.",
@@ -120,6 +179,40 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
     setDeleteConfirmText("");
   };
 
+  const toggleBorrowerExpansion = (borrowerId: number) => {
+    const newExpanded = new Set(expandedBorrowers);
+    if (newExpanded.has(borrowerId)) {
+      newExpanded.delete(borrowerId);
+    } else {
+      newExpanded.add(borrowerId);
+    }
+    setExpandedBorrowers(newExpanded);
+  };
+
+  const getLoanStrategyDisplay = (strategy: string) => {
+    switch (strategy) {
+      case "emi":
+        return "EMI";
+      case "flat":
+        return "FLAT";
+      case "custom":
+        return "CUSTOM";
+      case "gold_silver":
+        return "GOLD/SILVER";
+      default:
+        return strategy.toUpperCase();
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   return (
     <>
       <div className="bg-black rounded-lg shadow overflow-hidden border border-gray-700">
@@ -127,9 +220,6 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
           <table className="w-full">
             <thead className="bg-gray-900 text-left">
               <tr>
-                <th className="px-6 py-3 text-xs font-bold text-white uppercase tracking-wider">
-                  ID
-                </th>
                 <th className="px-6 py-3 text-xs font-bold text-white uppercase tracking-wider">
                   Borrower
                 </th>
@@ -160,102 +250,395 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {borrowers.length === 0 ? (
+              {borrowersWithLoans.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-4 text-center text-gray-300">
+                  <td colSpan={9} className="px-6 py-4 text-center text-gray-300">
                     No borrowers found. Add your first borrower to get started.
                   </td>
                 </tr>
               ) : (
-                borrowers.map((borrower, index) => (
-                  <tr key={borrower.id} className="hover:bg-[#111111]">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-white">{borrower.id}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
-                          isDefaulter(borrower.id) ? 'bg-red-600' : 'bg-blue-600'
-                        }`}>
-                          <span>{borrower.name ? borrower.name.charAt(0).toUpperCase() : '?'}</span>
-                        </div>
-                        <div className="font-medium text-white">
-                          {highlightText(borrower.name, searchQuery)}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">
-                        {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm">
-                        <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
-                        <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {borrower.loan ? (
-                        <>
-                          <div className="font-medium text-white">₹{borrower.loan.formattedAmount.toLocaleString()}</div>
-                        </>
-                      ) : (
-                        <span className="text-gray-400">No loan</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {borrower.loan ? (
-                        <span className="font-medium text-white">
-                          {borrower.loan.loanStrategy 
-                            ? borrower.loan.loanStrategy.toUpperCase() 
-                            : (borrower.loan.paymentType === 'interest_only' ? 'FLAT' : 'EMI')}
-                        </span>
-                      ) : <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {borrower.loan ? (
-                        <span className="font-medium text-white">
-                          {borrower.loan.loanStrategy === 'custom' || borrower.loan.loanStrategy === 'gold_silver'
-                            ? 'NA'
-                            : borrower.loan.loanStrategy === 'emi' 
-                              ? `₹${(borrower.loan.customEmiAmount || 0).toLocaleString()}`
-                              : `₹${(borrower.loan.flatMonthlyAmount || 0).toLocaleString()}`}
-                        </span>
-                      ) : <span className="text-gray-400">-</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-white">
-                      {borrower.nextPayment || "-"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <StatusBadge status={borrower.status} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-3">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => setSelectedBorrower(borrower.id)}
-                        >
-                          {isAdmin ? (
-                            <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
-                          ) : (
-                            <Eye size={16} className="text-blue-400 hover:text-blue-300" />
-                          )}
-                        </Button>
-                        {isAdmin && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => setConfirmDelete(borrower.id)}
-                          >
-                            <Trash2 size={16} className="text-red-500 hover:text-red-400" />
-                          </Button>
+                borrowersWithLoans.map((borrower) => {
+                  const loans = borrower.loans || [];
+                  const hasMultipleLoans = loans.length > 1;
+                  const isExpanded = expandedBorrowers.has(borrower.id);
+                  
+                  if (loans.length === 0) {
+                    // Borrower with no loans
+                    return (
+                      <tr key={borrower.id} className="hover:bg-[#111111]">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
+                              isDefaulter(borrower.id) ? 'bg-red-600' : 'bg-blue-600'
+                            }`}>
+                              <span>{borrower.name ? borrower.name.charAt(0).toUpperCase() : '?'}</span>
+                            </div>
+                            <div className="font-medium text-white">
+                              {highlightText(borrower.name, searchQuery)}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-white">
+                            {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm">
+                            <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
+                            <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
+                          </div>
+                        </td>
+                        <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          No loans
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <StatusBadge status={borrower.status} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-3">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => setSelectedBorrower(borrower.id)}
+                            >
+                              {isAdmin ? (
+                                <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                              ) : (
+                                <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                              )}
+                            </Button>
+                            {isAdmin && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => setConfirmDelete(borrower.id)}
+                              >
+                                <Trash2 size={16} className="text-red-500 hover:text-red-400" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // Borrower with loans
+                  return loans.map((loan, loanIndex) => {
+                    // For single loan borrowers, show loan details directly
+                    if (!hasMultipleLoans && loanIndex === 0) {
+                      return (
+                        <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white mr-3 ${
+                                isDefaulter(borrower.id) ? 'bg-red-600' : 'bg-blue-600'
+                              }`}>
+                                <span>{borrower.name ? borrower.name.charAt(0).toUpperCase() : '?'}</span>
+                              </div>
+                              <div>
+                                <div className="font-medium text-white">
+                                  {highlightText(borrower.name, searchQuery)}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-white">
+                              {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm">
+                              <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
+                              <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="font-medium text-white">
+                              {formatCurrency(loan.amount)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="font-medium text-white">
+                              {getLoanStrategyDisplay(loan.loanStrategy)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="font-medium text-white">
+                              {loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver'
+                                ? 'NA'
+                                : loan.loanStrategy === 'emi' 
+                                  ? formatCurrency(loan.customEmiAmount || 0)
+                                  : formatCurrency(loan.flatMonthlyAmount || 0)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-white">
+                            {loan.nextPayment || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <StatusBadge status={loan.status} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center space-x-3">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => setSelectedBorrower(borrower.id)}
+                              >
+                                {isAdmin ? (
+                                  <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                                ) : (
+                                  <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                                )}
+                              </Button>
+                              {isAdmin && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => setConfirmDelete(borrower.id)}
+                                >
+                                  <Trash2 size={16} className="text-red-500 hover:text-red-400" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    
+                    // For multiple loan borrowers
+                    // Show only the first loan by default, or all if expanded
+                    const shouldShow = loanIndex === 0 || isExpanded;
+                    
+                    if (!shouldShow) return null;
+                    
+                    // For collapsed view with multiple loans, show NA in loan columns
+                    const isCollapsedMultipleLoans = loanIndex === 0 && hasMultipleLoans && !isExpanded;
+                    
+                    return (
+                      <>
+                        {/* Borrower info row - only for first loan */}
+                        {loanIndex === 0 && (
+                          <tr key={`${borrower.id}-info`} className="hover:bg-[#111111]">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="relative mr-3">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleBorrowerExpansion(borrower.id)}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-white p-0 hover:opacity-80 ${
+                                      isDefaulter(borrower.id) ? 'bg-red-600' : 'bg-blue-600'
+                                    }`}
+                                  >
+                                    <span>{borrower.name ? borrower.name.charAt(0).toUpperCase() : '?'}</span>
+                                  </Button>
+                                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                                    <span className="text-xs font-bold text-black">{loans.length}</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="font-medium text-white">
+                                    {highlightText(borrower.name, searchQuery)}
+                                  </div>
+                                  {!isExpanded && (
+                                    <div className="text-xs text-gray-400">
+                                      {loans.length} loans
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-white">
+                                {borrower.guarantorName ? highlightText(borrower.guarantorName, searchQuery) : "-"}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm">
+                                <div className="text-white">{highlightText(borrower.phone, searchQuery)}</div>
+                                <div className="text-xs text-gray-300">{highlightText(borrower.address, searchQuery)}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="font-medium text-white">
+                                {!isExpanded ? "" : ""}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {!isExpanded ? "" : ""}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {!isExpanded ? "" : ""}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-white">
+                              {!isExpanded ? "" : ""}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              {!isExpanded ? (
+                                <span className="text-gray-400"></span>
+                              ) : (
+                                ""
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => setSelectedBorrower(borrower.id)}
+                                >
+                                  {isAdmin ? (
+                                    <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                                  ) : (
+                                    <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                                  )}
+                                </Button>
+                                {isAdmin && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    onClick={() => setConfirmDelete(borrower.id)}
+                                  >
+                                    <Trash2 size={16} className="text-red-500 hover:text-red-400" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        
+                        {/* Loan #1 row - only show when expanded */}
+                        {loanIndex === 0 && isExpanded && (
+                          <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="ml-10 font-medium text-white">
+                                Loan 1
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-400">-</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-400">-</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="font-medium text-white">
+                                {formatCurrency(loan.amount)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {getLoanStrategyDisplay(loan.loanStrategy)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver'
+                                  ? 'NA'
+                                  : loan.loanStrategy === 'emi' 
+                                    ? formatCurrency(loan.customEmiAmount || 0)
+                                    : formatCurrency(loan.flatMonthlyAmount || 0)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-white">
+                              {loan.nextPayment || "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <StatusBadge status={loan.status} />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => setSelectedBorrower(borrower.id)}
+                                >
+                                  {isAdmin ? (
+                                    <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                                  ) : (
+                                    <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                                  )}
+                                </Button>
+                                {isAdmin && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    onClick={() => setConfirmDelete(borrower.id)}
+                                  >
+                                    <Trash2 size={16} className="text-red-500 hover:text-red-400" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        
+                        {/* Additional loan details rows - only show when expanded */}
+                        {isExpanded && loanIndex > 0 && (
+                          <tr key={`${borrower.id}-${loan.id}`} className="hover:bg-[#111111]">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="ml-10 font-medium text-white">
+                                Loan {loanIndex + 1}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-400">-</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-400">-</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="font-medium text-white">
+                                {formatCurrency(loan.amount)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {getLoanStrategyDisplay(loan.loanStrategy)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-medium text-white">
+                                {loan.loanStrategy === 'custom' || loan.loanStrategy === 'gold_silver'
+                                  ? 'NA'
+                                  : loan.loanStrategy === 'emi' 
+                                    ? formatCurrency(loan.customEmiAmount || 0)
+                                    : formatCurrency(loan.flatMonthlyAmount || 0)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-white">
+                              {loan.nextPayment || "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <StatusBadge status={loan.status} />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => setSelectedBorrower(borrower.id)}
+                                >
+                                  {isAdmin ? (
+                                    <Pencil size={16} className="text-blue-400 hover:text-blue-300" />
+                                  ) : (
+                                    <Eye size={16} className="text-blue-400 hover:text-blue-300" />
+                                  )}
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  });
+                })
               )}
             </tbody>
           </table>
@@ -263,8 +646,8 @@ const BorrowerTable = ({ borrowers, searchQuery = "" }: BorrowerTableProps) => {
         <div className="bg-gray-900 px-6 py-3 flex items-center justify-between border-t border-gray-700">
           <div className="text-sm text-white/70">
             Showing <span className="font-medium text-white">1</span> to{" "}
-            <span className="font-medium text-white">{borrowers.length}</span> of{" "}
-            <span className="font-medium text-white">{borrowers.length}</span> results
+            <span className="font-medium text-white">{borrowersWithLoans.length}</span> of{" "}
+            <span className="font-medium text-white">{borrowersWithLoans.length}</span> results
           </div>
           {/* Pagination would go here in a real app with more data */}
         </div>

@@ -43,6 +43,11 @@ export const loans = pgTable("loans", {
   amount: real("amount").notNull(),
   startDate: date("start_date").notNull(),
   
+  // Guarantor information (per loan)
+  guarantorName: text("guarantor_name"),
+  guarantorPhone: text("guarantor_phone"),
+  guarantorAddress: text("guarantor_address"),
+  
   // Loan strategy
   loanStrategy: text("loan_strategy").default(LoanStrategy.EMI).notNull(),
   
@@ -60,6 +65,9 @@ export const loans = pgTable("loans", {
   netWeight: real("net_weight"), // calculated field
   amountPaid: real("amount_paid"),
   goldSilverNotes: text("gold_silver_notes"),
+  
+  // General loan notes
+  notes: text("notes"),
   
   // Loan status
   status: text("status").default(LoanStatus.ACTIVE).notNull(),

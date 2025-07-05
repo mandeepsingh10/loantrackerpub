@@ -34,6 +34,14 @@ const loanFormSchema = z.object({
   }),
   startDate: z.string().min(1, { message: "Start date is required" }),
   
+  // Guarantor fields
+  guarantorName: z.string().min(1, { message: "Guarantor name is required" }),
+  guarantorPhone: z.string().min(1, { message: "Guarantor phone is required" }),
+  guarantorAddress: z.string().min(1, { message: "Guarantor address is required" }),
+  
+  // Loan notes
+  notes: z.string().optional(),
+  
   // EMI-specific fields
   tenure: z.string().optional(),
   customEmiAmount: z.string().optional(),
@@ -197,6 +205,10 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
       amount: "10000",
       loanStrategy: "emi",
       startDate: new Date().toISOString().split("T")[0],
+      guarantorName: "",
+      guarantorPhone: "",
+      guarantorAddress: "",
+      notes: "",
       tenure: "12",
       customEmiAmount: "1000",
       flatMonthlyAmount: "1000",
@@ -225,6 +237,10 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
       amount: parseFloat(values.amount),
       loanStrategy: values.loanStrategy,
       startDate: values.startDate,
+      guarantorName: values.guarantorName,
+      guarantorPhone: values.guarantorPhone,
+      guarantorAddress: values.guarantorAddress,
+      notes: values.notes || "",
     };
     
     // Add strategy-specific fields
@@ -325,6 +341,66 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
                       <Input 
                         type="date" 
                         {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-medium text-white mb-4">Guarantor Information</h4>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="guarantorName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Guarantor Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Enter guarantor name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="guarantorPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Guarantor Phone</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Enter guarantor phone"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="guarantorAddress"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Guarantor Address</FormLabel>
+                    <FormControl>
+                      <textarea
+                        rows={3}
+                        placeholder="Enter guarantor address"
+                        {...field}
+                        className="w-full px-3 py-2 text-white bg-black border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-gray-400"
                       />
                     </FormControl>
                     <FormMessage />
@@ -603,7 +679,7 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
               name="goldSilverNotes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-lg font-bold text-white">Notes</FormLabel>
+                  <FormLabel className="text-lg font-bold text-white">Gold & Silver Notes</FormLabel>
                   <FormControl>
                     <textarea
                       rows={4}
@@ -621,6 +697,30 @@ const LoanForm = ({ borrowerId, onSubmit, onCancel, isSubmitting }: LoanFormProp
             />
           </div>
         )}
+
+        <div className="mt-6">
+          <FormField
+            control={form.control}
+            name="notes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-lg font-bold text-white">Loan Notes</FormLabel>
+                <FormControl>
+                  <textarea
+                    rows={4}
+                    placeholder="Enter any additional notes about this loan, terms, conditions, or special agreements..."
+                    {...field}
+                    className="w-full px-3 py-2 text-white bg-black border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-gray-400"
+                  />
+                </FormControl>
+                <FormDescription>
+                  Optional notes about the loan terms, conditions, or any special agreements
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <Separator className="my-4" />
 
