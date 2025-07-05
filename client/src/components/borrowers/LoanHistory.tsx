@@ -35,7 +35,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface LoanHistoryProps {
   borrowerId: number;
   onAddLoan: () => void;
-  onViewLoan: (loan: Loan) => void;
+  onViewLoan: (loan: Loan, loanNumber?: number) => void;
 }
 
 export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryProps) => {
@@ -273,7 +273,7 @@ export const LoanHistory = ({ borrowerId, onAddLoan, onViewLoan }: LoanHistoryPr
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => onViewLoan(loan)}
+                            onClick={() => onViewLoan(loan, index + 1)}
                             className="flex items-center"
                           >
                             <Eye className="h-4 w-4 mr-1" />

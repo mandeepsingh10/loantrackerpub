@@ -120,6 +120,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
   const [showLoanDetailsModal, setShowLoanDetailsModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [selectedLoanNumber, setSelectedLoanNumber] = useState<number | undefined>(undefined);
 
   // Fetch borrower details
   const { data: borrower, isLoading: borrowerLoading } = useQuery({
@@ -748,8 +749,9 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
     setShowAddLoanModal(true);
   };
 
-  const handleViewLoan = (loan: Loan) => {
+  const handleViewLoan = (loan: Loan, loanNumber?: number) => {
     setSelectedLoan(loan);
+    setSelectedLoanNumber(loanNumber);
     setShowLoanDetailsModal(true);
   };
 
@@ -1547,6 +1549,7 @@ export const BorrowerDetails = ({ borrowerId, isOpen, onClose, fullScreen = fals
       {/* Loan Details Modal */}
       <LoanDetailsModal
         loan={selectedLoan}
+        loanNumber={selectedLoanNumber}
         isOpen={showLoanDetailsModal}
         onClose={() => setShowLoanDetailsModal(false)}
       />
