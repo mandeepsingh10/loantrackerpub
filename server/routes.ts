@@ -91,6 +91,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         console.log('User account created: mandeepsingh10 / Md@Singh2024!');
         
+        // Create Lakshay's user account
+        await AuthService.createUser({
+          username: 'lakshayb',
+          password: 'Lk$Batra2024#',
+          role: UserRole.ADMIN,
+          firstName: 'Lakshay',
+          lastName: 'Batra',
+          email: 'lakshay@example.com'
+        });
+        console.log('User account created: lakshayb / Lk$Batra2024#');
+        
+        // Create viewer user for read-only access
+        await AuthService.createUser({
+          username: 'viewer',
+          password: 'View@2024!',
+          role: UserRole.VIEWER,
+          firstName: 'View',
+          lastName: 'Only',
+          email: 'viewer@example.com'
+        });
+        console.log('Viewer account created: viewer / View@2024!');
+        
         console.log('Default users initialization completed successfully!');
       }
     } catch (error) {
