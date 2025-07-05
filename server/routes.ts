@@ -1214,11 +1214,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('Creating backup...');
       
-      // Get all data from storage
+      // Get all data from storage (excluding users for security)
       const borrowers = await storage.getBorrowers();
       const loans = await storage.getLoans();
       const payments = await storage.getPayments();
-      const users = await storage.getUsers();
       
       // Get photos from uploads directory and embed them in backup
       const photosDir = path.join(__dirname, '../uploads/photos');
@@ -1275,7 +1274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalBorrowers: borrowers.length,
           totalLoans: loans.length,
           totalPayments: payments.length,
-          totalUsers: users.length,
+          totalUsers: 0, // Users are not backed up for security
           totalPhotos: Object.keys(photos).length,
           totalPhotoSize: Object.values(photos).reduce((sum, photo) => sum + (photo.size || 0), 0),
           features: {
@@ -1284,14 +1283,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             multipleLoanStrategies: true,
             customPayments: true,
             notesSupport: true,
-            userManagement: true
+            userManagement: false // Users are not included in backup
           }
         },
         data: {
           borrowers,
           loans,
-          payments,
-          users
+          payments
+          // users excluded for security
         },
         photos
       };
@@ -1313,11 +1312,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Invalid backup file format' });
       }
       
+      // Note: Users are not restored from backup for security reasons
+      // Default users will be created on startup if no users exist
+      
       console.log('Clearing existing data...');
       
       // Clear existing data using TRUNCATE CASCADE for complete cleanup
-      await db.execute(sql.raw('TRUNCATE TABLE payments, loans, borrowers, users RESTART IDENTITY CASCADE'));
-      console.log('Tables cleared successfully');
+      // Note: Users table is not cleared to preserve admin access
+      await db.execute(sql.raw('TRUNCATE TABLE payments, loans, borrowers RESTART IDENTITY CASCADE'));
+      console.log('Tables cleared successfully (users preserved)');
       
       // Restore photos if they exist
       if (photos && typeof photos === 'object') {
@@ -1382,22 +1385,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      console.log('Restoring users...');
-      // Restore users (if they exist in backup)
-      if (data.users && Array.isArray(data.users)) {
-        for (const user of data.users) {
-          await storage.createUser({
-            username: user.username,
-            email: user.email,
-            password: 'temporary_password_123', // Users will need to reset their password
-            role: user.role,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            isActive: user.isActive
-          });
-        }
-        console.log(`Restored ${data.users.length} users`);
-      }
+      // Users are not restored from backup for security reasons
+      // Default users will be created on startup if no users exist
+      console.log('Skipping user restoration (users are not backed up for security)');
       
       console.log('Restoring borrowers...');
       // Create a mapping from old IDs to new IDs
@@ -1487,7 +1477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           borrowers: data.borrowers.length,
           loans: data.loans.length,
           payments: data.payments.length,
-          users: data.users ? data.users.length : 0,
+          users: 0, // Users are not restored for security
           photos: photos ? Object.keys(photos).length : 0,
           photoSize: photos ? Object.values(photos).reduce((sum, photo) => sum + (typeof photo === 'string' ? 0 : (photo.size || 0)), 0) : 0
         }
