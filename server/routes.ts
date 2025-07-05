@@ -1239,23 +1239,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`Found ${photoFiles.length} photo files, ${referencedPhotos.size} referenced in borrower data`);
         
+        // Only include photos that are referenced by borrowers
         for (const filename of photoFiles) {
-          const filePath = path.join(photosDir, filename);
-          const fileBuffer = fs.readFileSync(filePath);
-          const base64Data = fileBuffer.toString('base64');
-          
-          // Determine MIME type based on file extension
-          const ext = path.extname(filename).toLowerCase();
-          let mimetype = 'image/jpeg'; // default
-          if (ext === '.png') mimetype = 'image/png';
-          else if (ext === '.gif') mimetype = 'image/gif';
-          else if (ext === '.webp') mimetype = 'image/webp';
-          
-          photos[filename] = {
-            data: base64Data,
-            mimetype: mimetype,
-            size: fileBuffer.length
-          };
+          // Only include this photo if it's referenced by a borrower
+          if (referencedPhotos.has(filename)) {
+            const filePath = path.join(photosDir, filename);
+            const fileBuffer = fs.readFileSync(filePath);
+            const base64Data = fileBuffer.toString('base64');
+            
+            // Determine MIME type based on file extension
+            const ext = path.extname(filename).toLowerCase();
+            let mimetype = 'image/jpeg'; // default
+            if (ext === '.png') mimetype = 'image/png';
+            else if (ext === '.gif') mimetype = 'image/gif';
+            else if (ext === '.webp') mimetype = 'image/webp';
+            
+            photos[filename] = {
+              data: base64Data,
+              mimetype: mimetype,
+              size: fileBuffer.length
+            };
+          }
         }
         
         // Check for orphaned photos (files not referenced by any borrower)
@@ -1264,7 +1268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Warning: Found ${orphanedPhotos.length} orphaned photos: ${orphanedPhotos.join(', ')}`);
         }
         
-        console.log(`Included ${Object.keys(photos).length} photos in backup (${Object.values(photos).reduce((sum, photo) => sum + photo.size, 0)} bytes total)`);
+        console.log(`Included ${Object.keys(photos).length} referenced photos in backup (${Object.values(photos).reduce((sum, photo) => sum + photo.size, 0)} bytes total)`);
       }
       
       const backupData = {
